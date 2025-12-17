@@ -117,63 +117,76 @@ export default class SparkParticleSystem {
   }
 
   /**
-   * Spawn sparks from motion center point
-   * @param {Uint8ClampedArray} motionBuffer - Motion intensity buffer (unused, kept for API)
-   * @param {number} width - Buffer width (unused)
-   * @param {number} height - Buffer height (unused)
+   * Spawn light trails from the LEADING EDGE of movement only
+   * Particles are left behind like light painting - they don't shoot forward
+   * Faster movement creates bigger/brighter trails
+   * @param {Uint8ClampedArray} motionBuffer - Motion intensity buffer (160x120)
+   * @param {number} width - Buffer width
+   * @param {number} height - Buffer height
    * @param {number} velX - Global motion velocity X (-1 to 1)
    * @param {number} velY - Global motion velocity Y (-1 to 1)
    * @param {number} intensity - Overall motion intensity (0-1)
    * @param {number} dt - Delta time in seconds
-   * @param {number} centerX - Motion center X (0-1)
-   * @param {number} centerY - Motion center Y (0-1)
    */
-  spawnFromMotion(motionBuffer, width, height, velX, velY, intensity, dt, centerX = 0.5, centerY = 0.5) {
-    if (intensity < 0.05) return;
+  spawnFromMotion(motionBuffer, width, height, velX, velY, intensity, dt) {
+    if (intensity < 0.03 || !motionBuffer) return;
 
-    // Need significant velocity to spawn directional sparks
-    const velMag = Math.sqrt(velX * velX + velY * velY);
-    if (velMag < 0.08) return;  // Skip if motion has no clear direction
+    // Calculate movement direction
+    const globalVelMag = Math.sqrt(velX * velX + velY * velY);
+    if (globalVelMag < 0.08) return;
 
-    // Calculate spawn count based on density and intensity
-    const baseSpawnRate = 120;  // Base particles per second at density 1.0
-    const spawnCount = Math.floor(baseSpawnRate * this.density * intensity * velMag * dt * 60);
+    // Direction of movement (in buffer coordinates, Y not flipped)
+    const dirX = velX / globalVelMag;
+    const dirY = -velY / globalVelMag;  // Flip Y for buffer coords
 
-    // Normalize velocity direction
-    const dirX = velX / velMag;
-    const dirY = velY / velMag;
+    // How far ahead to look for edge detection (in pixels)
+    const lookahead = 4;
 
-    for (let s = 0; s < spawnCount; s++) {
-      // Find inactive particle slot
+    // Number of random samples to check each frame
+    const numSamples = Math.floor(150 * this.density);
+    const motionThreshold = 40;
+
+    for (let i = 0; i < numSamples; i++) {
+      // Random position in motion buffer
+      const x = Math.floor(Math.random() * width);
+      const y = Math.floor(Math.random() * height);
+      const motion = motionBuffer[y * width + x] || 0;
+
+      if (motion < motionThreshold) continue;
+
+      // Check if this is a LEADING EDGE pixel
+      // Leading edge = has motion, but less/no motion AHEAD in direction of travel
+      const aheadX = Math.floor(x + dirX * lookahead);
+      const aheadY = Math.floor(y + dirY * lookahead);
+
+      // Skip if ahead position is out of bounds
+      if (aheadX < 0 || aheadX >= width || aheadY < 0 || aheadY >= height) continue;
+
+      const motionAhead = motionBuffer[aheadY * width + aheadX] || 0;
+
+      // Only spawn at leading edge: motion here, but less motion ahead
+      if (motionAhead > motion * 0.5) continue;
+
       const particle = this.findInactiveParticle();
-      if (!particle) continue;  // Pool is full
+      if (!particle) return;  // Pool full
 
-      // Spark speed scales with motion velocity
-      const speed = (0.2 + Math.random() * 0.3) * (1.0 + velMag * 2.0);
+      // Spawn at this location (normalized 0-1, flip Y for screen)
+      particle.x = x / width;
+      particle.y = 1.0 - y / height;
 
-      // Spread angle for fan effect (±30 degrees)
-      const spreadAngle = (Math.random() - 0.5) * 1.0;
-      const cosSpread = Math.cos(spreadAngle);
-      const sinSpread = Math.sin(spreadAngle);
+      // Particles are LEFT BEHIND - very slow drift, not shooting
+      // Tiny random drift for organic feel
+      particle.vx = (Math.random() - 0.5) * 0.02;
+      particle.vy = (Math.random() - 0.5) * 0.02;
 
-      // Rotate the motion direction by spread angle
-      const finalDirX = dirX * cosSpread - dirY * sinSpread;
-      const finalDirY = dirX * sinSpread + dirY * cosSpread;
+      // Speed affects size and lifetime - faster = bigger, brighter, longer
+      const speedFactor = Math.min(2.0, globalVelMag * 2);
 
-      // Spawn at motion center with tiny random offset
-      const spawnOffset = 0.02;
-      particle.x = centerX + (Math.random() - 0.5) * spawnOffset;
-      particle.y = centerY + (Math.random() - 0.5) * spawnOffset;
-      particle.vx = finalDirX * speed;
-      particle.vy = finalDirY * speed;
-
-      // Randomize lifetime and size
       particle.age = 0;
-      particle.lifetime = 0.4 + Math.random() * 0.6;
-      particle.size = 0.5 + Math.random() * 0.8;
+      particle.lifetime = 0.4 + speedFactor * 0.4;  // Faster = longer trail
+      particle.size = 0.3 + speedFactor * 0.5;      // Faster = bigger
       particle.colorIndex = Math.random();
       particle.active = true;
-
       this.activeCount++;
     }
   }
@@ -189,13 +202,13 @@ export default class SparkParticleSystem {
       const p = this.particles[i];
       if (!p.active) continue;
 
-      // Pure momentum - no gravity, slight deceleration for visual appeal
+      // Pure momentum - no gravity, gradual deceleration for wispy trails
       p.x += p.vx * dt;
       p.y += p.vy * dt;
 
-      // Slight velocity decay for more natural movement
-      p.vx *= 0.995;
-      p.vy *= 0.995;
+      // More velocity decay for graceful wispy movement
+      p.vx *= 0.98;
+      p.vy *= 0.98;
 
       // Age particle
       p.age += dt / p.lifetime;
