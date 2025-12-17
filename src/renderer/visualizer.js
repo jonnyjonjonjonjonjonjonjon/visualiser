@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import shaders from './shaders/index.js';
+import SparkParticleSystem from './sparkParticleSystem.js';
 
 /**
  * Visualizer - Main Three.js visualization engine for music visualizer
@@ -40,7 +41,18 @@ export default class Visualizer {
       uTreble: { value: 0.0 },
       uEnergy: { value: 0.0 },
       uBeat: { value: 0.0 },
-      uSpectrum: { value: null }
+      uSpectrum: { value: null },
+      // Webcam motion uniforms
+      uMotionIntensity: { value: 0.0 },
+      uMotionCenter: { value: new THREE.Vector2(0.5, 0.5) },
+      uMotionVelocity: { value: new THREE.Vector2(0.0, 0.0) },
+      uMotionMode: { value: 0 },
+      uMotionTexture: { value: null },
+      // Spark particle uniforms
+      uSparkTexture: { value: null },
+      uSparkVelocityTexture: { value: null },
+      uSparkColorMode: { value: 0 },
+      uSparkActiveCount: { value: 0.0 }
     };
 
     // Beat decay value for smooth beat response
@@ -60,6 +72,27 @@ export default class Visualizer {
     this.spectrumTexture.magFilter = THREE.LinearFilter;
     this.spectrumTexture.needsUpdate = true;
     this.uniforms.uSpectrum.value = this.spectrumTexture;
+
+    // Create motion texture (160x120 DataTexture for webcam motion data)
+    this.motionWidth = 160;
+    this.motionHeight = 120;
+    this.motionData = new Uint8Array(this.motionWidth * this.motionHeight);
+    this.motionTexture = new THREE.DataTexture(
+      this.motionData,
+      this.motionWidth,
+      this.motionHeight,
+      THREE.RedFormat,
+      THREE.UnsignedByteType
+    );
+    this.motionTexture.minFilter = THREE.LinearFilter;
+    this.motionTexture.magFilter = THREE.LinearFilter;
+    this.motionTexture.needsUpdate = true;
+    this.uniforms.uMotionTexture.value = this.motionTexture;
+
+    // Create spark particle system for Trails mode
+    this.sparkSystem = new SparkParticleSystem(2000);
+    this.uniforms.uSparkTexture.value = this.sparkSystem.getTexture();
+    this.uniforms.uSparkVelocityTexture.value = this.sparkSystem.getVelocityTexture();
 
     // Current mesh (fullscreen quad)
     this.mesh = null;
@@ -171,7 +204,7 @@ export default class Visualizer {
   }
 
   /**
-   * Update uniforms from audio analyzer data
+   * Update uniforms from audio and motion analyzer data
    * @param {Object} audioData - Audio analysis data
    * @param {number} audioData.bass - Bass frequency level (0-1)
    * @param {number} audioData.mid - Mid frequency level (0-1)
@@ -179,8 +212,9 @@ export default class Visualizer {
    * @param {number} audioData.energy - Overall energy level (0-1)
    * @param {boolean} audioData.beat - Beat detected flag
    * @param {Uint8Array} audioData.spectrum - Frequency spectrum data (typically 0-255)
+   * @param {Object} motionData - Motion analysis data (optional)
    */
-  update(audioData) {
+  update(audioData, motionData = null) {
     // Update time uniform (increment each frame)
     this.uniforms.uTime.value += 0.016; // ~60fps
 
@@ -211,6 +245,60 @@ export default class Visualizer {
       }
       this.spectrumTexture.needsUpdate = true;
     }
+
+    // Update motion uniforms from webcam data
+    if (motionData && motionData.mode > 0) {
+      this.uniforms.uMotionIntensity.value = motionData.intensity || 0;
+      this.uniforms.uMotionCenter.value.set(
+        motionData.centerX || 0.5,
+        motionData.centerY || 0.5
+      );
+      this.uniforms.uMotionVelocity.value.set(
+        motionData.velocityX || 0,
+        motionData.velocityY || 0
+      );
+      this.uniforms.uMotionMode.value = motionData.mode;
+
+      // Update motion texture
+      if (motionData.buffer && motionData.buffer.length > 0) {
+        const sourceLength = Math.min(motionData.buffer.length, this.motionData.length);
+        for (let i = 0; i < sourceLength; i++) {
+          this.motionData[i] = motionData.buffer[i];
+        }
+        this.motionTexture.needsUpdate = true;
+      }
+
+      // Trails mode (mode 3) - update spark particle system
+      if (motionData.mode === 3) {
+        const dt = 0.016;  // ~60fps
+        this.sparkSystem.spawnFromMotion(
+          motionData.buffer,
+          motionData.width,
+          motionData.height,
+          motionData.velocityX || 0,
+          motionData.velocityY || 0,
+          motionData.intensity || 0,
+          dt
+        );
+        this.sparkSystem.update(dt);
+
+        // Update spark uniforms
+        this.uniforms.uSparkTexture.value = this.sparkSystem.getTexture();
+        this.uniforms.uSparkVelocityTexture.value = this.sparkSystem.getVelocityTexture();
+        this.uniforms.uSparkColorMode.value = this.sparkSystem.getColorMode();
+        this.uniforms.uSparkActiveCount.value = this.sparkSystem.getActiveCount();
+      }
+    } else {
+      // Motion off - decay values smoothly
+      this.uniforms.uMotionIntensity.value *= 0.9;
+      this.uniforms.uMotionMode.value = 0;
+
+      // Clear sparks when motion is off
+      if (this.sparkSystem.getActiveCount() > 0) {
+        this.sparkSystem.update(0.016);
+        this.uniforms.uSparkActiveCount.value = this.sparkSystem.getActiveCount();
+      }
+    }
   }
 
   /**
@@ -237,6 +325,51 @@ export default class Visualizer {
   }
 
   /**
+   * Adjust spark density (for Trails mode)
+   * @param {number} delta - Amount to adjust density by
+   * @returns {number} New density value
+   */
+  adjustSparkDensity(delta) {
+    if (this.sparkSystem) {
+      return this.sparkSystem.adjustDensity(delta);
+    }
+    return 1.0;
+  }
+
+  /**
+   * Get current spark density
+   * @returns {number} Current density value
+   */
+  getSparkDensity() {
+    if (this.sparkSystem) {
+      return this.sparkSystem.getDensity();
+    }
+    return 1.0;
+  }
+
+  /**
+   * Cycle spark color mode (for Trails mode)
+   * @returns {string} New color mode name
+   */
+  cycleSparkColorMode() {
+    if (this.sparkSystem) {
+      return this.sparkSystem.cycleColorMode();
+    }
+    return 'Fire';
+  }
+
+  /**
+   * Get current spark color mode name
+   * @returns {string} Color mode name
+   */
+  getSparkColorModeName() {
+    if (this.sparkSystem) {
+      return this.sparkSystem.getColorModeName();
+    }
+    return 'Fire';
+  }
+
+  /**
    * Clean up WebGL resources
    */
   destroy() {
@@ -250,6 +383,16 @@ export default class Visualizer {
     // Dispose spectrum texture
     if (this.spectrumTexture) {
       this.spectrumTexture.dispose();
+    }
+
+    // Dispose motion texture
+    if (this.motionTexture) {
+      this.motionTexture.dispose();
+    }
+
+    // Dispose spark system
+    if (this.sparkSystem) {
+      this.sparkSystem.dispose();
     }
 
     // Dispose renderer

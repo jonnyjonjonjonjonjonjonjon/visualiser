@@ -1,5 +1,6 @@
 import AudioAnalyzer from './audioAnalyzer.js';
 import Visualizer from './visualizer.js';
+import WebcamAnalyzer from './webcamAnalyzer.js';
 
 // DOM elements
 const canvas = document.getElementById('visualizer');
@@ -11,6 +12,7 @@ const errorEl = document.getElementById('error-message');
 // App state
 let audioAnalyzer = null;
 let visualizer = null;
+let webcamAnalyzer = null;
 let isPaused = false;
 let isHelpVisible = false;
 let mouseTimeout = null;
@@ -81,7 +83,8 @@ function initVisualizer() {
 function render() {
     if (!isPaused && audioAnalyzer && visualizer) {
         const audioData = audioAnalyzer.getAudioData();
-        visualizer.update(audioData);
+        const motionData = webcamAnalyzer ? webcamAnalyzer.getMotionData() : null;
+        visualizer.update(audioData, motionData);
         visualizer.render();
     }
 
@@ -144,6 +147,59 @@ function handleKeyPress(event) {
             }
             break;
 
+        case 'c':
+        case 'C':
+            if (webcamAnalyzer) {
+                const modeName = webcamAnalyzer.cycleMode();
+                statusEl.textContent = `Webcam: ${modeName}`;
+                // Show motion intensity for debugging
+                if (webcamAnalyzer.getMode() > 0) {
+                    const updateMotionStatus = () => {
+                        if (webcamAnalyzer && webcamAnalyzer.getMode() > 0) {
+                            const data = webcamAnalyzer.getMotionData();
+                            let status = `Webcam: ${webcamAnalyzer.getModeName()} | Motion: ${(data.intensity * 100).toFixed(0)}%`;
+                            // Show spark count in Trails mode
+                            if (webcamAnalyzer.getMode() === 3 && visualizer) {
+                                status += ` | Sparks: ${visualizer.getSparkDensity().toFixed(0) * 100}%`;
+                            }
+                            statusEl.textContent = status;
+                            requestAnimationFrame(updateMotionStatus);
+                        }
+                    };
+                    updateMotionStatus();
+                }
+            } else {
+                statusEl.textContent = 'Webcam not available';
+            }
+            break;
+
+        case 'v':
+        case 'V':
+            // Cycle spark color mode (only in Trails mode)
+            if (webcamAnalyzer && webcamAnalyzer.getMode() === 3 && visualizer) {
+                const colorMode = visualizer.cycleSparkColorMode();
+                statusEl.textContent = `Spark Color: ${colorMode}`;
+            }
+            break;
+
+        case '+':
+        case '=':
+            // Increase spark density (only in Trails mode)
+            if (webcamAnalyzer && webcamAnalyzer.getMode() === 3 && visualizer) {
+                const density = visualizer.adjustSparkDensity(0.25);
+                statusEl.textContent = `Spark Density: ${(density * 100).toFixed(0)}%`;
+            }
+            break;
+
+        case '-':
+        case '_':
+            // Decrease spark density (only in Trails mode)
+            if (webcamAnalyzer && webcamAnalyzer.getMode() === 3 && visualizer) {
+                const density = visualizer.adjustSparkDensity(-0.25);
+                statusEl.textContent = `Spark Density: ${(density * 100).toFixed(0)}%`;
+            }
+            break;
+
         default:
             // Number keys 1-9 for direct scene selection
             const num = parseInt(event.key);
@@ -170,7 +226,21 @@ async function init() {
     if (audioInitialized) {
         resizeCanvas();
         initVisualizer();
-        statusEl.textContent = 'Ready - Press H for help';
+
+        // Initialize webcam analyzer (non-blocking, graceful failure)
+        try {
+            webcamAnalyzer = new WebcamAnalyzer();
+            await webcamAnalyzer.init();
+            statusEl.textContent = 'Ready - Press H for help, C for webcam';
+        } catch (error) {
+            console.error('Webcam initialization failed:', error);
+            statusEl.textContent = `Webcam error: ${error.message}`;
+            webcamAnalyzer = null;
+            // After 3 seconds, change to normal status
+            setTimeout(() => {
+                statusEl.textContent = 'Ready - Press H for help';
+            }, 3000);
+        }
 
         // Start render loop
         render();
