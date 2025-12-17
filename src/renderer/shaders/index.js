@@ -1060,6 +1060,19 @@ void main() {
 }
 `;
 
+// iPhone Camera shader - placeholder, actual feed displayed via img overlay
+const iphoneCameraShader = `
+precision highp float;
+
+uniform vec2 uResolution;
+
+void main() {
+    // Black background - the actual iPhone feed is displayed
+    // via an img element overlay on top of the canvas
+    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+}
+`;
+
 // Export all shaders
 export default {
     shaders: [
@@ -1112,6 +1125,11 @@ export default {
             name: "Webcam",
             vertexShader: commonVertexShader,
             fragmentShader: webcamFeedShader
+        },
+        {
+            name: "iPhone Camera",
+            vertexShader: commonVertexShader,
+            fragmentShader: iphoneCameraShader
         }
     ]
 };

@@ -1,6 +1,7 @@
 import AudioAnalyzer from './audioAnalyzer.js';
 import Visualizer from './visualizer.js';
 import WebcamAnalyzer from './webcamAnalyzer.js';
+import IPhoneCameraSource from './iphoneCameraSource.js';
 
 // DOM elements
 const canvas = document.getElementById('visualizer');
@@ -23,11 +24,20 @@ const paintColorSpeedSlider = document.getElementById('paint-color-speed');
 const paintColorSpeedValueEl = document.getElementById('paint-color-speed-value');
 const paintFadeDelaySlider = document.getElementById('paint-fade-delay');
 const paintFadeDelayValueEl = document.getElementById('paint-fade-delay-value');
+// iPhone modal elements
+const iphoneModalEl = document.getElementById('iphone-modal');
+const iphoneUrlInput = document.getElementById('iphone-url');
+const iphoneConnectBtn = document.getElementById('iphone-connect-btn');
+const iphoneCancelBtn = document.getElementById('iphone-cancel-btn');
+const iphoneErrorEl = document.getElementById('iphone-error');
+const iphoneStatusEl = document.getElementById('iphone-status');
+const iphoneFeedEl = document.getElementById('iphone-feed');
 
 // App state
 let audioAnalyzer = null;
 let visualizer = null;
 let webcamAnalyzer = null;
+let iphoneSource = null;
 let isPaused = false;
 let isHelpVisible = false;
 let mouseTimeout = null;
@@ -198,6 +208,128 @@ function initPaintControls() {
     });
 }
 
+// Show iPhone connection modal
+function showIPhoneModal() {
+    iphoneModalEl.classList.add('visible');
+    iphoneErrorEl.classList.remove('visible');
+    iphoneStatusEl.classList.remove('visible');
+    iphoneConnectBtn.disabled = false;
+    iphoneUrlInput.focus();
+    document.body.classList.add('show-cursor');
+}
+
+// Hide iPhone connection modal
+function hideIPhoneModal() {
+    iphoneModalEl.classList.remove('visible');
+    iphoneErrorEl.classList.remove('visible');
+    iphoneStatusEl.classList.remove('visible');
+}
+
+// Connect to iPhone camera stream
+async function connectIPhone() {
+    const url = iphoneUrlInput.value.trim();
+
+    if (!url) {
+        iphoneErrorEl.textContent = 'Please enter a stream URL';
+        iphoneErrorEl.classList.add('visible');
+        return;
+    }
+
+    // Validate URL format
+    try {
+        new URL(url);
+    } catch (e) {
+        iphoneErrorEl.textContent = 'Invalid URL format';
+        iphoneErrorEl.classList.add('visible');
+        return;
+    }
+
+    // Show connecting status
+    iphoneErrorEl.classList.remove('visible');
+    iphoneStatusEl.classList.add('visible');
+    iphoneConnectBtn.disabled = true;
+
+    try {
+        // Disconnect existing source if any
+        if (iphoneSource) {
+            iphoneSource.destroy();
+        }
+
+        iphoneSource = new IPhoneCameraSource();
+        await iphoneSource.connect(url);
+
+        hideIPhoneModal();
+        statusEl.textContent = 'iPhone camera connected';
+
+        // Store URL for reconnection
+        localStorage.setItem('iphoneStreamUrl', url);
+
+        // Show feed if on iPhone Camera visualization
+        updateIPhoneFeedVisibility();
+
+    } catch (error) {
+        console.error('iPhone connection failed:', error);
+        iphoneErrorEl.textContent = error.message || 'Failed to connect to stream';
+        iphoneErrorEl.classList.add('visible');
+        iphoneStatusEl.classList.remove('visible');
+        iphoneConnectBtn.disabled = false;
+        iphoneSource = null;
+    }
+}
+
+// Disconnect iPhone camera
+function disconnectIPhone() {
+    if (iphoneSource) {
+        iphoneSource.destroy();
+        iphoneSource = null;
+        statusEl.textContent = 'iPhone camera disconnected';
+    }
+    // Hide the feed overlay
+    iphoneFeedEl.style.display = 'none';
+    iphoneFeedEl.src = '';
+}
+
+// Update iPhone feed visibility based on current scene and connection
+function updateIPhoneFeedVisibility() {
+    const isIPhoneScene = visualizer && visualizer.getCurrentSceneName() === 'iPhone Camera';
+    const isConnected = iphoneSource && iphoneSource.isStreaming();
+
+    if (isIPhoneScene && isConnected) {
+        iphoneFeedEl.src = iphoneSource.getUrl();
+        iphoneFeedEl.style.display = 'block';
+    } else {
+        iphoneFeedEl.style.display = 'none';
+    }
+}
+
+// Initialize iPhone modal event listeners
+function initIPhoneControls() {
+    iphoneConnectBtn.addEventListener('click', connectIPhone);
+    iphoneCancelBtn.addEventListener('click', hideIPhoneModal);
+
+    // Connect on Enter key
+    iphoneUrlInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            connectIPhone();
+        } else if (e.key === 'Escape') {
+            hideIPhoneModal();
+        }
+    });
+
+    // Close modal on backdrop click
+    iphoneModalEl.addEventListener('click', (e) => {
+        if (e.target === iphoneModalEl) {
+            hideIPhoneModal();
+        }
+    });
+
+    // Restore last used URL
+    const savedUrl = localStorage.getItem('iphoneStreamUrl');
+    if (savedUrl) {
+        iphoneUrlInput.value = savedUrl;
+    }
+}
+
 // Initialize audio
 async function initAudio() {
     try {
@@ -228,6 +360,13 @@ function render() {
         const audioData = audioAnalyzer.getAudioData();
         const motionData = webcamAnalyzer ? webcamAnalyzer.getMotionData() : null;
         visualizer.update(audioData, motionData);
+
+        // Update iPhone texture if connected
+        if (iphoneSource && iphoneSource.isStreaming()) {
+            const imgElement = iphoneSource.getImageElement();
+            visualizer.updateIPhoneTexture(imgElement);
+        }
+
         visualizer.render();
     }
 
@@ -243,12 +382,14 @@ function handleKeyPress(event) {
             visualizer.previousScene();
             updateSceneName(visualizer.getCurrentSceneName());
             updatePaintControlsVisibility();
+            updateIPhoneFeedVisibility();
             break;
 
         case 'ArrowRight':
             visualizer.nextScene();
             updateSceneName(visualizer.getCurrentSceneName());
             updatePaintControlsVisibility();
+            updateIPhoneFeedVisibility();
             break;
 
         case ' ':
@@ -334,6 +475,22 @@ function handleKeyPress(event) {
             }
             break;
 
+        case 'i':
+        case 'I':
+            // Show iPhone connection modal (but not if modal is already visible)
+            if (!iphoneModalEl.classList.contains('visible')) {
+                showIPhoneModal();
+            }
+            break;
+
+        case 'd':
+        case 'D':
+            // Disconnect iPhone camera
+            if (iphoneSource) {
+                disconnectIPhone();
+            }
+            break;
+
         default:
             // Number keys 1-9 for direct scene selection
             const num = parseInt(event.key);
@@ -341,6 +498,7 @@ function handleKeyPress(event) {
                 visualizer.setScene(num - 1);
                 updateSceneName(visualizer.getCurrentSceneName());
                 updatePaintControlsVisibility();
+                updateIPhoneFeedVisibility();
             }
             break;
     }
@@ -363,6 +521,7 @@ async function init() {
         initVisualizer();
         initTrailsControls();
         initPaintControls();
+        initIPhoneControls();
 
         // Initialize webcam analyzer (non-blocking, graceful failure)
         try {

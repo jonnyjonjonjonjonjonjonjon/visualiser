@@ -122,6 +122,11 @@ export default class Visualizer {
     this.uniforms.uWebcamTextureHD = { value: this.webcamHDTexture };
     this.uniforms.uWebcamHDResolution = { value: new THREE.Vector2(this.webcamHDWidth, this.webcamHDHeight) };
 
+    // Create iPhone camera texture (will be set from img element)
+    this.iphoneTexture = null;
+    this.uniforms.uIPhoneTexture = { value: null };
+    this.uniforms.uIPhoneResolution = { value: new THREE.Vector2(1280, 720) };
+
     // Create spark particle system for Trails mode
     this.sparkSystem = new SparkParticleSystem(2000);
 
@@ -419,6 +424,49 @@ export default class Visualizer {
   }
 
   /**
+   * Update iPhone camera texture from image element
+   * Uses canvas as intermediary for MJPEG streams
+   * @param {HTMLImageElement} imgElement - Image element streaming MJPEG
+   */
+  updateIPhoneTexture(imgElement) {
+    if (!imgElement || imgElement.naturalWidth === 0) {
+      return;
+    }
+
+    const width = imgElement.naturalWidth;
+    const height = imgElement.naturalHeight;
+
+    // Create canvas and texture if not exists
+    if (!this.iphoneCanvas) {
+      this.iphoneCanvas = document.createElement('canvas');
+      this.iphoneCtx = this.iphoneCanvas.getContext('2d');
+    }
+
+    // Resize canvas if needed
+    if (this.iphoneCanvas.width !== width || this.iphoneCanvas.height !== height) {
+      this.iphoneCanvas.width = width;
+      this.iphoneCanvas.height = height;
+    }
+
+    // Draw image to canvas (this captures the current MJPEG frame)
+    this.iphoneCtx.drawImage(imgElement, 0, 0);
+
+    // Create texture from canvas if not exists
+    if (!this.iphoneTexture) {
+      this.iphoneTexture = new THREE.CanvasTexture(this.iphoneCanvas);
+      this.iphoneTexture.minFilter = THREE.LinearFilter;
+      this.iphoneTexture.magFilter = THREE.LinearFilter;
+      this.uniforms.uIPhoneTexture.value = this.iphoneTexture;
+    }
+
+    // Update resolution uniform
+    this.uniforms.uIPhoneResolution.value.set(width, height);
+
+    // Mark texture for update
+    this.iphoneTexture.needsUpdate = true;
+  }
+
+  /**
    * Render the current scene
    */
   render() {
@@ -553,6 +601,14 @@ export default class Visualizer {
     if (this.webcamHDTexture) {
       this.webcamHDTexture.dispose();
     }
+
+    // Dispose iPhone texture and canvas
+    if (this.iphoneTexture) {
+      this.iphoneTexture.dispose();
+      this.iphoneTexture = null;
+    }
+    this.iphoneCanvas = null;
+    this.iphoneCtx = null;
 
     // Dispose spark system
     if (this.sparkSystem) {
