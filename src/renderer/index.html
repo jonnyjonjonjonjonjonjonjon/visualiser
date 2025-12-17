@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Visualizer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #000;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            cursor: none;
+        }
+
+        body.show-cursor {
+            cursor: default;
+        }
+
+        #visualizer {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+
+        #overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 30px;
+            background: linear-gradient(to bottom, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0.4) 70%, transparent 100%);
+            color: #fff;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 1000;
+        }
+
+        body.show-cursor #overlay {
+            opacity: 1;
+        }
+
+        #scene-name {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+        }
+
+        #status {
+            font-size: 14px;
+            color: #aaa;
+            margin-bottom: 20px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+        }
+
+        #help {
+            font-size: 13px;
+            line-height: 1.6;
+            color: #ccc;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            max-width: 500px;
+        }
+
+        #help.visible {
+            opacity: 1;
+        }
+
+        #help h3 {
+            font-size: 16px;
+            margin-bottom: 8px;
+            color: #fff;
+        }
+
+        #help .key-group {
+            margin-bottom: 12px;
+        }
+
+        #help .key {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 2px 8px;
+            border-radius: 3px;
+            margin-right: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        #error-message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 0, 0, 0.9);
+            color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 500px;
+            text-align: center;
+            display: none;
+            z-index: 2000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        #error-message.visible {
+            display: block;
+        }
+
+        #error-message h2 {
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+
+        #error-message p {
+            line-height: 1.6;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="visualizer"></canvas>
+
+    <div id="overlay">
+        <div id="scene-name">Loading...</div>
+        <div id="status">Initializing audio...</div>
+        <div id="help">
+            <h3>Keyboard Shortcuts</h3>
+            <div class="key-group">
+                <span class="key">←</span><span class="key">→</span> Previous / Next Scene
+            </div>
+            <div class="key-group">
+                <span class="key">1-9</span> Jump to Scene
+            </div>
+            <div class="key-group">
+                <span class="key">Space</span> Pause / Resume
+            </div>
+            <div class="key-group">
+                <span class="key">M</span> Mute Audio Monitoring
+            </div>
+            <div class="key-group">
+                <span class="key">F</span> or <span class="key">F11</span> Toggle Fullscreen
+            </div>
+            <div class="key-group">
+                <span class="key">T</span> Toggle Always on Top
+            </div>
+            <div class="key-group">
+                <span class="key">H</span> Toggle Help
+            </div>
+        </div>
+    </div>
+
+    <div id="error-message">
+        <h2>Microphone Access Required</h2>
+        <p>This visualizer needs access to your microphone to analyze audio. Please grant permission and reload the application.</p>
+    </div>
+
+    <script type="module" src="index.js"></script>
+</body>
+</html>
