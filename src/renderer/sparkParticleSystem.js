@@ -51,6 +51,7 @@ export default class SparkParticleSystem {
     this.density = 1.0;      // 0.25 to 2.0, controls spawn rate
     this.colorMode = 0;      // 0=fire, 1=rainbow, 2=visualization
     this.colorModeNames = ['Fire', 'Rainbow', 'Visualization'];
+    this.sizeMultiplier = 1.0;  // -3.0 to 3.0, scales particle size
 
     // Initialize particle pool
     this.particles = new Array(maxParticles);
@@ -250,7 +251,7 @@ export default class SparkParticleSystem {
         this.colors[idx * 4 + 3] = fade * fade;  // Alpha with quadratic falloff
 
         // Size in pixels (larger when young, smaller when old)
-        this.sizes[idx] = p.size * 12 * (0.5 + fade * 0.5);
+        this.sizes[idx] = p.size * 12 * (0.5 + fade * 0.5) * this.sizeMultiplier;
 
         idx++;
       }
@@ -416,6 +417,71 @@ export default class SparkParticleSystem {
    */
   getDensity() {
     return this.density;
+  }
+
+  /**
+   * Get current size multiplier
+   * @returns {number}
+   */
+  getSizeMultiplier() {
+    return this.sizeMultiplier;
+  }
+
+  /**
+   * Set size multiplier
+   * @param {number} value - Size multiplier (0.1 to 4.0)
+   */
+  setSizeMultiplier(value) {
+    this.sizeMultiplier = Math.max(0.1, Math.min(4.0, value));
+  }
+
+  /**
+   * Get current max particles
+   * @returns {number}
+   */
+  getMaxParticles() {
+    return this.maxParticles;
+  }
+
+  /**
+   * Set max particles (resizes particle pool and GPU buffers)
+   * @param {number} newMax - New max particles (clamped to 500-10000)
+   */
+  setMaxParticles(newMax) {
+    newMax = Math.max(500, Math.min(10000, Math.floor(newMax)));
+    if (newMax === this.maxParticles) return;
+
+    // Clear existing particles
+    this.activeCount = 0;
+    this.nextFreeSlot = 0;
+
+    // Resize particle pool
+    this.maxParticles = newMax;
+    this.particles = new Array(newMax);
+    for (let i = 0; i < newMax; i++) {
+      this.particles[i] = {
+        x: 0,
+        y: 0,
+        vx: 0,
+        vy: 0,
+        age: 1.0,
+        lifetime: 1.0,
+        size: 1.0,
+        colorIndex: 0,
+        active: false
+      };
+    }
+
+    // Resize GPU buffers
+    this.positions = new Float32Array(newMax * 3);
+    this.colors = new Float32Array(newMax * 4);
+    this.sizes = new Float32Array(newMax);
+
+    this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
+    this.geometry.setAttribute('color', new THREE.BufferAttribute(this.colors, 4));
+    this.geometry.setAttribute('size', new THREE.BufferAttribute(this.sizes, 1));
+
+    this.updateBuffers();
   }
 
   /**

@@ -11,6 +11,10 @@ const errorEl = document.getElementById('error-message');
 const trailsControlsEl = document.getElementById('trails-controls');
 const densitySlider = document.getElementById('density-slider');
 const densityValueEl = document.getElementById('density-value');
+const particlesSlider = document.getElementById('particles-slider');
+const particlesValueEl = document.getElementById('particles-value');
+const sizeSlider = document.getElementById('size-slider');
+const sizeValueEl = document.getElementById('size-value');
 
 // App state
 let audioAnalyzer = null;
@@ -81,6 +85,16 @@ function updateTrailsControlsUI() {
     const density = visualizer.getSparkDensity();
     densitySlider.value = density * 100;
     densityValueEl.textContent = `${Math.round(density * 100)}%`;
+
+    // Update particles slider
+    const particles = visualizer.sparkSystem ? visualizer.sparkSystem.getMaxParticles() : 2000;
+    particlesSlider.value = particles;
+    particlesValueEl.textContent = particles.toString();
+
+    // Update size slider (convert multiplier back to slider value)
+    const size = visualizer.sparkSystem ? visualizer.sparkSystem.getSizeMultiplier() : 1.0;
+    sizeSlider.value = Math.round((size - 1.0) * 100);  // 1.0x → 0, 2.0x → 100, 0.5x → -50
+    sizeValueEl.textContent = `${Math.round(size * 100)}%`;
 }
 
 // Initialize trails controls event listeners
@@ -101,6 +115,22 @@ function initTrailsControls() {
         const density = densitySlider.value / 100;
         visualizer.sparkSystem.setDensity(density);
         densityValueEl.textContent = `${Math.round(density * 100)}%`;
+    });
+
+    // Particles slider
+    particlesSlider.addEventListener('input', () => {
+        if (!visualizer || !visualizer.sparkSystem) return;
+        const particles = parseInt(particlesSlider.value);
+        visualizer.sparkSystem.setMaxParticles(particles);
+        particlesValueEl.textContent = particles.toString();
+    });
+
+    // Size slider: 0 = normal (1.0x), positive = bigger, negative = smaller
+    sizeSlider.addEventListener('input', () => {
+        if (!visualizer || !visualizer.sparkSystem) return;
+        const size = 1.0 + parseInt(sizeSlider.value) / 100;  // 0 → 1.0x, 100 → 2.0x, -50 → 0.5x
+        visualizer.sparkSystem.setSizeMultiplier(size);
+        sizeValueEl.textContent = `${Math.round(size * 100)}%`;
     });
 }
 

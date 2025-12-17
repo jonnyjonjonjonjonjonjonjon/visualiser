@@ -963,6 +963,14 @@ void main() {
 }
 `;
 
+const blackScreenShader = `
+precision highp float;
+
+void main() {
+    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+}
+`;
+
 // Export all shaders
 export default {
     shaders: [
@@ -1000,6 +1008,11 @@ export default {
             name: "Geometric Pulse",
             vertexShader: commonVertexShader,
             fragmentShader: geometricPulseShader
+        },
+        {
+            name: "Black",
+            vertexShader: commonVertexShader,
+            fragmentShader: blackScreenShader
         }
     ]
 };

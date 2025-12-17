@@ -145,7 +145,7 @@
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        #trails-controls.visible {
+        body.show-cursor #trails-controls.visible {
             opacity: 1;
             transform: translateY(0);
         }
@@ -286,6 +286,20 @@
             <div class="slider-row">
                 <input type="range" id="density-slider" min="25" max="200" value="100">
                 <span id="density-value">100%</span>
+            </div>
+        </div>
+        <div class="control-group">
+            <label>Particles</label>
+            <div class="slider-row">
+                <input type="range" id="particles-slider" min="500" max="5000" value="2000" step="100">
+                <span id="particles-value">2000</span>
+            </div>
+        </div>
+        <div class="control-group">
+            <label>Size</label>
+            <div class="slider-row">
+                <input type="range" id="size-slider" min="-90" max="300" value="0" step="10">
+                <span id="size-value">100%</span>
             </div>
         </div>
     </div>
