@@ -47,12 +47,7 @@ export default class Visualizer {
       uMotionCenter: { value: new THREE.Vector2(0.5, 0.5) },
       uMotionVelocity: { value: new THREE.Vector2(0.0, 0.0) },
       uMotionMode: { value: 0 },
-      uMotionTexture: { value: null },
-      // Spark particle uniforms
-      uSparkTexture: { value: null },
-      uSparkVelocityTexture: { value: null },
-      uSparkColorMode: { value: 0 },
-      uSparkActiveCount: { value: 0.0 }
+      uMotionTexture: { value: null }
     };
 
     // Beat decay value for smooth beat response
@@ -91,8 +86,9 @@ export default class Visualizer {
 
     // Create spark particle system for Trails mode
     this.sparkSystem = new SparkParticleSystem(2000);
-    this.uniforms.uSparkTexture.value = this.sparkSystem.getTexture();
-    this.uniforms.uSparkVelocityTexture.value = this.sparkSystem.getVelocityTexture();
+
+    // Add spark particles mesh to scene (rendered on top of visualization)
+    this.scene.add(this.sparkSystem.getMesh());
 
     // Current mesh (fullscreen quad)
     this.mesh = null;
@@ -278,25 +274,26 @@ export default class Visualizer {
           motionData.velocityX || 0,
           motionData.velocityY || 0,
           motionData.intensity || 0,
-          dt
+          dt,
+          motionData.centerX || 0.5,
+          motionData.centerY || 0.5
         );
         this.sparkSystem.update(dt);
-
-        // Update spark uniforms
-        this.uniforms.uSparkTexture.value = this.sparkSystem.getTexture();
-        this.uniforms.uSparkVelocityTexture.value = this.sparkSystem.getVelocityTexture();
-        this.uniforms.uSparkColorMode.value = this.sparkSystem.getColorMode();
-        this.uniforms.uSparkActiveCount.value = this.sparkSystem.getActiveCount();
+        this.sparkSystem.getMesh().visible = true;
+      } else {
+        // Not in trails mode - hide spark mesh
+        this.sparkSystem.getMesh().visible = false;
       }
     } else {
       // Motion off - decay values smoothly
       this.uniforms.uMotionIntensity.value *= 0.9;
       this.uniforms.uMotionMode.value = 0;
 
-      // Clear sparks when motion is off
+      // Hide sparks and let them fade out
       if (this.sparkSystem.getActiveCount() > 0) {
         this.sparkSystem.update(0.016);
-        this.uniforms.uSparkActiveCount.value = this.sparkSystem.getActiveCount();
+      } else {
+        this.sparkSystem.getMesh().visible = false;
       }
     }
   }

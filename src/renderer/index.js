@@ -8,6 +8,9 @@ const sceneNameEl = document.getElementById('scene-name');
 const statusEl = document.getElementById('status');
 const helpEl = document.getElementById('help');
 const errorEl = document.getElementById('error-message');
+const trailsControlsEl = document.getElementById('trails-controls');
+const densitySlider = document.getElementById('density-slider');
+const densityValueEl = document.getElementById('density-value');
 
 // App state
 let audioAnalyzer = null;
@@ -53,6 +56,52 @@ function showError(message) {
 // Hide error message
 function hideError() {
     errorEl.classList.remove('visible');
+}
+
+// Show/hide trails controls based on mode
+function updateTrailsControlsVisibility() {
+    if (webcamAnalyzer && webcamAnalyzer.getMode() === 3) {
+        trailsControlsEl.classList.add('visible');
+    } else {
+        trailsControlsEl.classList.remove('visible');
+    }
+}
+
+// Update trails controls UI to match current settings
+function updateTrailsControlsUI() {
+    if (!visualizer) return;
+
+    // Update color buttons
+    const colorMode = visualizer.sparkSystem ? visualizer.sparkSystem.getColorMode() : 0;
+    trailsControlsEl.querySelectorAll('[data-color]').forEach(btn => {
+        btn.classList.toggle('active', parseInt(btn.dataset.color) === colorMode);
+    });
+
+    // Update density slider
+    const density = visualizer.getSparkDensity();
+    densitySlider.value = density * 100;
+    densityValueEl.textContent = `${Math.round(density * 100)}%`;
+}
+
+// Initialize trails controls event listeners
+function initTrailsControls() {
+    // Color buttons
+    trailsControlsEl.querySelectorAll('[data-color]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (!visualizer || !visualizer.sparkSystem) return;
+            const mode = parseInt(btn.dataset.color);
+            visualizer.sparkSystem.setColorMode(mode);
+            updateTrailsControlsUI();
+        });
+    });
+
+    // Density slider
+    densitySlider.addEventListener('input', () => {
+        if (!visualizer || !visualizer.sparkSystem) return;
+        const density = densitySlider.value / 100;
+        visualizer.sparkSystem.setDensity(density);
+        densityValueEl.textContent = `${Math.round(density * 100)}%`;
+    });
 }
 
 // Initialize audio
@@ -152,22 +201,8 @@ function handleKeyPress(event) {
             if (webcamAnalyzer) {
                 const modeName = webcamAnalyzer.cycleMode();
                 statusEl.textContent = `Webcam: ${modeName}`;
-                // Show motion intensity for debugging
-                if (webcamAnalyzer.getMode() > 0) {
-                    const updateMotionStatus = () => {
-                        if (webcamAnalyzer && webcamAnalyzer.getMode() > 0) {
-                            const data = webcamAnalyzer.getMotionData();
-                            let status = `Webcam: ${webcamAnalyzer.getModeName()} | Motion: ${(data.intensity * 100).toFixed(0)}%`;
-                            // Show spark count in Trails mode
-                            if (webcamAnalyzer.getMode() === 3 && visualizer) {
-                                status += ` | Sparks: ${visualizer.getSparkDensity().toFixed(0) * 100}%`;
-                            }
-                            statusEl.textContent = status;
-                            requestAnimationFrame(updateMotionStatus);
-                        }
-                    };
-                    updateMotionStatus();
-                }
+                updateTrailsControlsVisibility();
+                updateTrailsControlsUI();
             } else {
                 statusEl.textContent = 'Webcam not available';
             }
@@ -179,6 +214,7 @@ function handleKeyPress(event) {
             if (webcamAnalyzer && webcamAnalyzer.getMode() === 3 && visualizer) {
                 const colorMode = visualizer.cycleSparkColorMode();
                 statusEl.textContent = `Spark Color: ${colorMode}`;
+                updateTrailsControlsUI();
             }
             break;
 
@@ -188,6 +224,7 @@ function handleKeyPress(event) {
             if (webcamAnalyzer && webcamAnalyzer.getMode() === 3 && visualizer) {
                 const density = visualizer.adjustSparkDensity(0.25);
                 statusEl.textContent = `Spark Density: ${(density * 100).toFixed(0)}%`;
+                updateTrailsControlsUI();
             }
             break;
 
@@ -197,6 +234,7 @@ function handleKeyPress(event) {
             if (webcamAnalyzer && webcamAnalyzer.getMode() === 3 && visualizer) {
                 const density = visualizer.adjustSparkDensity(-0.25);
                 statusEl.textContent = `Spark Density: ${(density * 100).toFixed(0)}%`;
+                updateTrailsControlsUI();
             }
             break;
 
@@ -226,6 +264,7 @@ async function init() {
     if (audioInitialized) {
         resizeCanvas();
         initVisualizer();
+        initTrailsControls();
 
         // Initialize webcam analyzer (non-blocking, graceful failure)
         try {

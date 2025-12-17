@@ -10,10 +10,7 @@
 // - uMotionVelocity: vec2 (motion direction -1 to 1)
 // - uMotionMode: int (0=off, 1=push, 2=predator, 3=trails)
 // - uMotionTexture: sampler2D (160x120 motion field)
-// - uSparkTexture: sampler2D (64x64 particle positions)
-// - uSparkVelocityTexture: sampler2D (64x64 particle velocities)
-// - uSparkColorMode: int (0=fire, 1=rainbow, 2=visualization)
-// - uSparkActiveCount: float (number of active particles)
+// Note: Spark particles (mode 3) are rendered separately via THREE.Points
 
 const commonVertexShader = `
 void main() {
@@ -28,10 +25,6 @@ uniform vec2 uMotionCenter;
 uniform vec2 uMotionVelocity;
 uniform int uMotionMode;
 uniform sampler2D uMotionTexture;
-uniform sampler2D uSparkTexture;
-uniform sampler2D uSparkVelocityTexture;
-uniform int uSparkColorMode;
-uniform float uSparkActiveCount;
 `;
 
 // Motion helper functions for shaders
@@ -83,117 +76,6 @@ vec3 applyPaintTrails(vec3 col, vec2 uv, float time) {
     // Strong blend based on motion
     float trailStrength = motion * (uMotionIntensity * 4.0 + 0.5);
     return mix(col, trailColor, clamp(trailStrength, 0.0, 1.0));
-}
-
-// Fire color gradient: white -> yellow -> orange -> red -> dark
-vec3 sparkFireColor(float t) {
-    t = clamp(t, 0.0, 1.0);
-    if (t < 0.2) return mix(vec3(1.0, 1.0, 1.0), vec3(1.0, 1.0, 0.6), t * 5.0);
-    if (t < 0.4) return mix(vec3(1.0, 1.0, 0.6), vec3(1.0, 0.7, 0.2), (t - 0.2) * 5.0);
-    if (t < 0.7) return mix(vec3(1.0, 0.7, 0.2), vec3(1.0, 0.3, 0.0), (t - 0.4) * 3.33);
-    return mix(vec3(1.0, 0.3, 0.0), vec3(0.3, 0.1, 0.0), (t - 0.7) * 3.33);
-}
-
-// Rainbow color from hue value
-vec3 sparkRainbowColor(float hue) {
-    return vec3(
-        0.5 + 0.5 * cos(6.28318 * (hue + 0.0)),
-        0.5 + 0.5 * cos(6.28318 * (hue + 0.33)),
-        0.5 + 0.5 * cos(6.28318 * (hue + 0.67))
-    );
-}
-
-// Spark Trails effect - renders particles with glowing trails
-vec3 applySparkTrails(vec3 col, vec2 uv, float time) {
-    if (uMotionMode != 3) return col;
-
-    vec3 sparkAccum = vec3(0.0);
-    float textureSize = 64.0;
-    float maxParticles = min(uSparkActiveCount, 300.0);
-
-    // Loop through active particles (fixed iteration count for WebGL compatibility)
-    for (float i = 0.0; i < 300.0; i += 1.0) {
-        // Early exit via conditional (more compatible than break)
-        if (i >= maxParticles) {
-            continue;
-        }
-
-        // Calculate texture coordinates for this particle
-        float px = mod(i, textureSize);
-        float py = floor(i / textureSize);
-        vec2 texCoord = vec2((px + 0.5) / textureSize, (py + 0.5) / textureSize);
-
-        // Sample particle data
-        vec4 posData = texture2D(uSparkTexture, texCoord);      // x, y, age, size
-        vec4 velData = texture2D(uSparkVelocityTexture, texCoord); // vx, vy, colorIndex, active
-
-        float particleX = posData.x;
-        float particleY = posData.y;
-        float age = posData.z;
-        float size = posData.w;
-        float vx = velData.x;
-        float vy = velData.y;
-        float colorIndex = velData.z;
-        float isActive = velData.w;
-
-        // Skip inactive or off-screen particles
-        if (isActive < 0.5 || particleX < -0.5 || size < 0.01) continue;
-
-        vec2 particlePos = vec2(particleX, particleY);
-        vec2 toParticle = uv - particlePos;
-        float dist = length(toParticle);
-
-        // Skip if too far from this particle (optimization)
-        if (dist > 0.15) continue;
-
-        // Fade based on age
-        float fade = 1.0 - clamp(age, 0.0, 1.0);
-        fade = fade * fade;  // Quadratic falloff
-
-        // Spark core - small bright dot
-        float coreSize = 0.004 * size * (0.5 + fade * 0.5);
-        float core = smoothstep(coreSize, coreSize * 0.3, dist);
-
-        // Trail effect - elongated glow in opposite direction of velocity
-        vec2 vel = vec2(vx, vy);
-        float velMag = length(vel);
-        if (velMag > 0.001) {
-            vec2 velDir = vel / velMag;
-            // Project distance onto velocity direction (trail extends behind particle)
-            float alongVel = dot(toParticle, velDir);
-            float perpVel = length(toParticle - alongVel * velDir);
-
-            // Trail only extends behind (negative alongVel)
-            float trailLength = velMag * 0.15 * size;
-            float trailWidth = 0.003 * size;
-            float trail = smoothstep(trailLength, 0.0, -alongVel) *
-                         smoothstep(trailWidth, trailWidth * 0.3, perpVel) *
-                         step(alongVel, 0.0);
-
-            core += trail * 0.6;
-        }
-
-        // Calculate spark color based on mode
-        vec3 sparkColor;
-        if (uSparkColorMode == 0) {
-            // Fire mode - color based on age (hot to cool)
-            sparkColor = sparkFireColor(age);
-        } else if (uSparkColorMode == 1) {
-            // Rainbow mode - color based on colorIndex and time
-            sparkColor = sparkRainbowColor(colorIndex + time * 0.3);
-        } else {
-            // Visualization mode - use a hue derived from audio/time
-            float vizHue = fract(time * 0.1 + colorIndex * 0.5);
-            sparkColor = sparkRainbowColor(vizHue);
-        }
-
-        // Accumulate spark contribution
-        float intensity = core * fade * 2.5;
-        sparkAccum += sparkColor * intensity;
-    }
-
-    // Additive blend sparks onto scene
-    return col + sparkAccum;
 }
 `;
 
@@ -323,7 +205,6 @@ void main() {
     col *= vignette;
 
     // Apply webcam effects
-    col = applySparkTrails(col, originalUV, uTime);
     col = applyPaintTrails(col, originalUV, uTime);
 
     gl_FragColor = vec4(col, 1.0);
@@ -427,7 +308,6 @@ void main() {
     col += centerGlow * vec3(0.2, 0.4, 0.8);
 
     // Apply webcam effects
-    col = applySparkTrails(col, originalUV, uTime);
     col = applyPaintTrails(col, originalUV, uTime);
 
     gl_FragColor = vec4(col, 1.0);
@@ -505,7 +385,6 @@ void main() {
     col *= edgeFade;
 
     // Apply webcam effects
-    col = applySparkTrails(col, originalUV, uTime);
     col = applyPaintTrails(col, originalUV, uTime);
 
     gl_FragColor = vec4(col, 1.0);
@@ -621,7 +500,6 @@ void main() {
     col += vec3(0.5, 0.3, 0.8) * (1.0 - smoothstep(0.0, 0.3, radius)) * uBeat;
 
     // Apply webcam effects
-    col = applySparkTrails(col, originalUV, uTime);
     col = applyPaintTrails(col, originalUV, uTime);
 
     gl_FragColor = vec4(col, 1.0);
@@ -774,7 +652,6 @@ void main() {
     col += vec3(uBeat * 0.2);
 
     // Apply webcam effects
-    col = applySparkTrails(col, originalUV, uTime);
     col = applyPaintTrails(col, originalUV, uTime);
 
     gl_FragColor = vec4(col, 1.0);
@@ -905,7 +782,6 @@ void main() {
     col *= vignette;
 
     // Apply webcam effects
-    col = applySparkTrails(col, originalUV, uTime);
     col = applyPaintTrails(col, originalUV, uTime);
 
     gl_FragColor = vec4(col, 1.0);
@@ -1074,7 +950,6 @@ void main() {
     col = mix(bgGrad, col, clamp(col, 0.0, 1.0));
 
     // Apply webcam effects
-    col = applySparkTrails(col, originalUV, uTime);
     col = applyPaintTrails(col, originalUV, uTime);
 
     gl_FragColor = vec4(col, 1.0);
