@@ -35,7 +35,7 @@ export default class Visualizer {
     // Initialize uniforms object
     this.uniforms = {
       uTime: { value: 0.0 },
-      uResolution: { value: new THREE.Vector2(this.container.clientWidth, this.container.clientHeight) },
+      uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
       uBass: { value: 0.0 },
       uMid: { value: 0.0 },
       uTreble: { value: 0.0 },

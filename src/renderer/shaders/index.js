@@ -113,8 +113,11 @@ void main() {
     // Background gradient
     col = mix(vec3(0.02, 0.02, 0.08), vec3(0.08, 0.02, 0.12), uv.y);
 
-    // Sample spectrum at this x position
-    float spectrumVal = texture2D(uSpectrum, vec2(uv.x, 0.5)).r;
+    // Sample spectrum with scaled range (microphone only captures low frequencies)
+    // Map full screen width to the frequency range that has data (~20% of texture)
+    float maxFreqRange = 0.25;
+    float texX = pow(uv.x, 1.5) * maxFreqRange;
+    float spectrumVal = texture2D(uSpectrum, vec2(texX, 0.5)).r;
 
     // Amplify and normalize spectrum value
     float waveHeight = spectrumVal * 2.5;
@@ -180,8 +183,9 @@ void main() {
     float barIndex = floor(uv.x * numBars);
     float barX = (barIndex + 0.5) / numBars;
 
-    // Sample spectrum for this bar
-    float barSpectrum = texture2D(uSpectrum, vec2(barX, 0.5)).r;
+    // Sample spectrum with scaled range for this bar
+    float barTexX = pow(barX, 1.5) * maxFreqRange;
+    float barSpectrum = texture2D(uSpectrum, vec2(barTexX, 0.5)).r;
     barSpectrum = pow(barSpectrum, 0.7) * 2.0; // Amplify
 
     // Create bar shape
@@ -370,8 +374,9 @@ void main() {
     float saturation = 0.8 + uMid * 0.2;
     float brightness = 0.6 + uEnergy * 0.4;
 
-    // Add spectrum-based color shift
-    float spectrumSample = texture2D(uSpectrum, vec2(uv.x, 0.5)).r;
+    // Add spectrum-based color shift (scaled to mic frequency range)
+    float maxFreqRange = 0.25;
+    float spectrumSample = texture2D(uSpectrum, vec2(uv.x * maxFreqRange, 0.5)).r;
     hue += spectrumSample * 0.2;
 
     vec3 col = hsv2rgb(vec3(hue, saturation, brightness));
@@ -544,8 +549,9 @@ mat3 rotateX(float angle) {
 }
 
 float getTerrainHeight(vec2 pos, float time) {
-    // Sample from spectrum based on position
-    float spectrumX = fract(pos.x * 0.05);
+    // Sample from spectrum based on position (scaled to mic frequency range)
+    float maxFreqRange = 0.25;
+    float spectrumX = fract(pos.x * 0.05) * maxFreqRange;
     float spectrumSample = texture2D(uSpectrum, vec2(spectrumX, 0.5)).r;
 
     // Base terrain wave
@@ -937,10 +943,11 @@ void main() {
     // Beat flash
     col += vec3(1.0) * uBeat * 0.3 * exp(-pattern * 5.0);
 
-    // Add rotating spectrum ring
+    // Add rotating spectrum ring (scaled to mic frequency range)
     float angle = atan(uv.y, uv.x);
     float radius = length(uv);
-    float spectrumAngle = (angle / TAU + 0.5);
+    float maxFreqRange = 0.25;
+    float spectrumAngle = (angle / TAU + 0.5) * maxFreqRange;
     float spectrumValue = texture2D(uSpectrum, vec2(spectrumAngle, 0.5)).r;
     float spectrumRing = smoothstep(0.02, 0.0, abs(radius - 2.0 - spectrumValue * 0.5));
     col += vec3(0.5, 1.0, 0.8) * spectrumRing * 2.0;
