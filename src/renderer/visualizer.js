@@ -47,7 +47,10 @@ export default class Visualizer {
       uMotionCenter: { value: new THREE.Vector2(0.5, 0.5) },
       uMotionVelocity: { value: new THREE.Vector2(0.0, 0.0) },
       uMotionMode: { value: 0 },
-      uMotionTexture: { value: null }
+      uMotionTexture: { value: null },
+      // Motion Paint uniforms
+      uPrevFrame: { value: null },
+      uDeltaTime: { value: 0.016 }
     };
 
     // Beat decay value for smooth beat response
@@ -93,6 +96,11 @@ export default class Visualizer {
     // Current mesh (fullscreen quad)
     this.mesh = null;
 
+    // Ping-pong render targets for Motion Paint visualization
+    this.pingPongTargets = null;
+    this.currentTargetIndex = 0;
+    this.lastFrameTime = performance.now();
+
     // Bind resize handler (called from index.js)
     this.handleResize = this.handleResize.bind(this);
   }
@@ -119,6 +127,11 @@ export default class Visualizer {
       this.scene.remove(this.mesh);
       if (this.mesh.geometry) this.mesh.geometry.dispose();
       if (this.mesh.material) this.mesh.material.dispose();
+    }
+
+    // Clear ping-pong targets when switching to Motion Paint (fresh start)
+    if (shaderDef.name === 'Motion Paint' && this.pingPongTargets) {
+      this.clearPingPongTargets();
     }
 
     // Create shader material
@@ -299,10 +312,96 @@ export default class Visualizer {
   }
 
   /**
+   * Initialize ping-pong render targets for Motion Paint
+   */
+  initPingPongTargets() {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    this.pingPongTargets = [
+      new THREE.WebGLRenderTarget(width, height, {
+        format: THREE.RGBAFormat,
+        type: THREE.FloatType,  // For age precision in alpha
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter
+      }),
+      new THREE.WebGLRenderTarget(width, height, {
+        format: THREE.RGBAFormat,
+        type: THREE.FloatType,
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter
+      })
+    ];
+  }
+
+  /**
+   * Clear ping-pong targets to black (fresh start)
+   */
+  clearPingPongTargets() {
+    if (this.pingPongTargets) {
+      const prevClearColor = this.renderer.getClearColor(new THREE.Color());
+      const prevClearAlpha = this.renderer.getClearAlpha();
+
+      this.renderer.setClearColor(0x000000, 0);
+
+      this.renderer.setRenderTarget(this.pingPongTargets[0]);
+      this.renderer.clear();
+      this.renderer.setRenderTarget(this.pingPongTargets[1]);
+      this.renderer.clear();
+      this.renderer.setRenderTarget(null);
+
+      this.renderer.setClearColor(prevClearColor, prevClearAlpha);
+    }
+  }
+
+  /**
+   * Dispose ping-pong targets
+   */
+  disposePingPongTargets() {
+    if (this.pingPongTargets) {
+      this.pingPongTargets[0].dispose();
+      this.pingPongTargets[1].dispose();
+      this.pingPongTargets = null;
+    }
+  }
+
+  /**
    * Render the current scene
    */
   render() {
-    this.renderer.render(this.scene, this.camera);
+    const isMotionPaint = this.shaders[this.currentSceneIndex].name === 'Motion Paint';
+
+    // Update delta time
+    const now = performance.now();
+    this.uniforms.uDeltaTime.value = (now - this.lastFrameTime) / 1000;
+    this.lastFrameTime = now;
+
+    if (isMotionPaint) {
+      // Initialize ping-pong targets if needed
+      if (!this.pingPongTargets) {
+        this.initPingPongTargets();
+        this.clearPingPongTargets();
+      }
+
+      // Set previous frame uniform
+      const prevTarget = this.pingPongTargets[this.currentTargetIndex];
+      const nextTarget = this.pingPongTargets[1 - this.currentTargetIndex];
+      this.uniforms.uPrevFrame.value = prevTarget.texture;
+
+      // Render to next target (accumulate state)
+      this.renderer.setRenderTarget(nextTarget);
+      this.renderer.render(this.scene, this.camera);
+
+      // Now render to screen using the accumulated result
+      this.uniforms.uPrevFrame.value = nextTarget.texture;
+      this.renderer.setRenderTarget(null);
+      this.renderer.render(this.scene, this.camera);
+
+      // Swap targets for next frame
+      this.currentTargetIndex = 1 - this.currentTargetIndex;
+    } else {
+      this.renderer.render(this.scene, this.camera);
+    }
   }
 
   /**
@@ -319,6 +418,13 @@ export default class Visualizer {
 
     // Update resolution uniform to match
     this.uniforms.uResolution.value.set(width, height);
+
+    // Recreate ping-pong targets at new size if they exist
+    if (this.pingPongTargets) {
+      this.disposePingPongTargets();
+      this.initPingPongTargets();
+      this.clearPingPongTargets();
+    }
   }
 
   /**
@@ -391,6 +497,9 @@ export default class Visualizer {
     if (this.sparkSystem) {
       this.sparkSystem.dispose();
     }
+
+    // Dispose ping-pong targets
+    this.disposePingPongTargets();
 
     // Dispose renderer
     if (this.renderer) {

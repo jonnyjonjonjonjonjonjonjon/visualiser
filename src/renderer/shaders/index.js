@@ -971,6 +971,53 @@ void main() {
 }
 `;
 
+const motionPaintShader = `
+precision highp float;
+
+uniform sampler2D uPrevFrame;
+uniform sampler2D uMotionTexture;
+uniform float uTime;
+uniform float uDeltaTime;
+uniform vec2 uResolution;
+
+// HSV to RGB conversion
+vec3 hsv2rgb(vec3 c) {
+    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / uResolution;
+
+    // Sample previous frame (RGB = color, A = age)
+    vec4 prev = texture2D(uPrevFrame, uv);
+
+    // Sample motion texture (flip Y for webcam coords)
+    float motion = texture2D(uMotionTexture, vec2(uv.x, 1.0 - uv.y)).r;
+
+    // Motion threshold (~38/255 normalized)
+    if (motion > 0.15) {
+        // Paint with time-based hue (cycle every ~20 seconds)
+        float hue = fract(uTime * 0.05);
+        vec3 color = hsv2rgb(vec3(hue, 0.9, 1.0));
+        gl_FragColor = vec4(color, 0.0);  // Reset age to 0
+    } else {
+        // No motion - age the pixel
+        float newAge = prev.a + uDeltaTime / 10.0;  // 10 seconds to reach 1.0
+
+        if (newAge > 1.0) {
+            // Fade toward black
+            vec3 faded = prev.rgb * (1.0 - uDeltaTime * 0.5);
+            gl_FragColor = vec4(faded, 1.0);
+        } else {
+            // Keep color, increment age
+            gl_FragColor = vec4(prev.rgb, newAge);
+        }
+    }
+}
+`;
+
 // Export all shaders
 export default {
     shaders: [
@@ -1013,6 +1060,11 @@ export default {
             name: "Black",
             vertexShader: commonVertexShader,
             fragmentShader: blackScreenShader
+        },
+        {
+            name: "Motion Paint",
+            vertexShader: commonVertexShader,
+            fragmentShader: motionPaintShader
         }
     ]
 };
