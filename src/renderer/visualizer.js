@@ -48,6 +48,7 @@ export default class Visualizer {
       uMotionVelocity: { value: new THREE.Vector2(0.0, 0.0) },
       uMotionMode: { value: 0 },
       uMotionTexture: { value: null },
+      uWebcamTexture: { value: null },
       // Motion Paint uniforms
       uPrevFrame: { value: null },
       uDeltaTime: { value: 0.016 },
@@ -89,6 +90,37 @@ export default class Visualizer {
     this.motionTexture.magFilter = THREE.LinearFilter;
     this.motionTexture.needsUpdate = true;
     this.uniforms.uMotionTexture.value = this.motionTexture;
+
+    // Create webcam texture (160x120 RGBA DataTexture for webcam video display)
+    this.webcamData = new Uint8Array(this.motionWidth * this.motionHeight * 4);
+    this.webcamTexture = new THREE.DataTexture(
+      this.webcamData,
+      this.motionWidth,
+      this.motionHeight,
+      THREE.RGBAFormat,
+      THREE.UnsignedByteType
+    );
+    this.webcamTexture.minFilter = THREE.LinearFilter;
+    this.webcamTexture.magFilter = THREE.LinearFilter;
+    this.webcamTexture.needsUpdate = true;
+    this.uniforms.uWebcamTexture.value = this.webcamTexture;
+
+    // Create high-res webcam texture (1280x720 RGBA DataTexture for HD display)
+    this.webcamHDWidth = 1280;
+    this.webcamHDHeight = 720;
+    this.webcamHDData = new Uint8Array(this.webcamHDWidth * this.webcamHDHeight * 4);
+    this.webcamHDTexture = new THREE.DataTexture(
+      this.webcamHDData,
+      this.webcamHDWidth,
+      this.webcamHDHeight,
+      THREE.RGBAFormat,
+      THREE.UnsignedByteType
+    );
+    this.webcamHDTexture.minFilter = THREE.LinearFilter;
+    this.webcamHDTexture.magFilter = THREE.LinearFilter;
+    this.webcamHDTexture.needsUpdate = true;
+    this.uniforms.uWebcamTextureHD = { value: this.webcamHDTexture };
+    this.uniforms.uWebcamHDResolution = { value: new THREE.Vector2(this.webcamHDWidth, this.webcamHDHeight) };
 
     // Create spark particle system for Trails mode
     this.sparkSystem = new SparkParticleSystem(2000);
@@ -278,6 +310,24 @@ export default class Visualizer {
           this.motionData[i] = motionData.buffer[i];
         }
         this.motionTexture.needsUpdate = true;
+      }
+
+      // Update webcam texture (RGBA frame)
+      if (motionData.frameBuffer && motionData.frameBuffer.length > 0) {
+        const sourceLength = Math.min(motionData.frameBuffer.length, this.webcamData.length);
+        for (let i = 0; i < sourceLength; i++) {
+          this.webcamData[i] = motionData.frameBuffer[i];
+        }
+        this.webcamTexture.needsUpdate = true;
+      }
+
+      // Update high-res webcam texture (HD RGBA frame)
+      if (motionData.displayFrameBuffer && motionData.displayFrameBuffer.length > 0) {
+        const sourceLength = Math.min(motionData.displayFrameBuffer.length, this.webcamHDData.length);
+        for (let i = 0; i < sourceLength; i++) {
+          this.webcamHDData[i] = motionData.displayFrameBuffer[i];
+        }
+        this.webcamHDTexture.needsUpdate = true;
       }
 
       // Trails mode (mode 3) - update spark particle system
@@ -494,6 +544,14 @@ export default class Visualizer {
     // Dispose motion texture
     if (this.motionTexture) {
       this.motionTexture.dispose();
+    }
+
+    // Dispose webcam textures
+    if (this.webcamTexture) {
+      this.webcamTexture.dispose();
+    }
+    if (this.webcamHDTexture) {
+      this.webcamHDTexture.dispose();
     }
 
     // Dispose spark system

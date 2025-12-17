@@ -23,12 +23,19 @@ export default class WebcamAnalyzer {
     this.motionVelocityX = 0;
     this.motionVelocityY = 0;
 
-    // Configuration
+    // Configuration - motion detection (low-res for performance)
     this.captureWidth = 160;
     this.captureHeight = 120;
     this.motionThreshold = 15;      // Lower = more sensitive
     this.smoothingFactor = 0.5;     // Lower = more responsive
     this.trailDecay = 0.92;         // Higher = longer trails
+
+    // High-res display capture
+    this.displayWidth = 1280;
+    this.displayHeight = 720;
+    this.displayCanvas = null;
+    this.displayCtx = null;
+    this.displayFrameBuffer = null;
 
     // State
     this.isInitialized = false;
@@ -55,23 +62,34 @@ export default class WebcamAnalyzer {
     this.video.style.display = 'none';
     document.body.appendChild(this.video);
 
-    // Create offscreen canvas for frame processing
+    // Create offscreen canvas for motion detection (low-res)
     this.canvas = document.createElement('canvas');
     this.canvas.width = this.captureWidth;
     this.canvas.height = this.captureHeight;
     this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
+
+    // Create high-res canvas for display
+    this.displayCanvas = document.createElement('canvas');
+    this.displayCanvas.width = this.displayWidth;
+    this.displayCanvas.height = this.displayHeight;
+    this.displayCtx = this.displayCanvas.getContext('2d', { willReadFrequently: true });
 
     // Initialize frame buffers
     const pixelCount = this.captureWidth * this.captureHeight;
     this.previousFrame = new Uint8ClampedArray(pixelCount);
     this.currentFrame = new Uint8ClampedArray(pixelCount);
     this.motionBuffer = new Uint8ClampedArray(pixelCount);
+    this.frameBuffer = new Uint8ClampedArray(pixelCount * 4);  // RGBA for low-res webcam
 
-    // Request webcam access
+    // High-res display buffer
+    const displayPixelCount = this.displayWidth * this.displayHeight;
+    this.displayFrameBuffer = new Uint8ClampedArray(displayPixelCount * 4);
+
+    // Request webcam access at high resolution
     this.stream = await navigator.mediaDevices.getUserMedia({
       video: {
-        width: { ideal: this.captureWidth },
-        height: { ideal: this.captureHeight },
+        width: { ideal: this.displayWidth },
+        height: { ideal: this.displayHeight },
         facingMode: 'user'
       }
     });
@@ -91,15 +109,28 @@ export default class WebcamAnalyzer {
       return;
     }
 
-    // Draw mirrored video frame to canvas (flip horizontally for natural interaction)
+    // Draw mirrored video frame to low-res canvas for motion detection
     this.ctx.save();
     this.ctx.scale(-1, 1);
     this.ctx.drawImage(this.video, -this.captureWidth, 0, this.captureWidth, this.captureHeight);
     this.ctx.restore();
 
-    // Get pixel data
+    // Draw mirrored video frame to high-res canvas for display
+    this.displayCtx.save();
+    this.displayCtx.scale(-1, 1);
+    this.displayCtx.drawImage(this.video, -this.displayWidth, 0, this.displayWidth, this.displayHeight);
+    this.displayCtx.restore();
+
+    // Get pixel data for motion detection
     const imageData = this.ctx.getImageData(0, 0, this.captureWidth, this.captureHeight);
     const pixels = imageData.data;
+
+    // Copy low-res RGBA frame data
+    this.frameBuffer.set(pixels);
+
+    // Capture high-res frame for display
+    const displayImageData = this.displayCtx.getImageData(0, 0, this.displayWidth, this.displayHeight);
+    this.displayFrameBuffer.set(displayImageData.data);
 
     // Swap frame buffers
     const temp = this.previousFrame;
@@ -185,8 +216,13 @@ export default class WebcamAnalyzer {
       velocityY: Math.max(-1, Math.min(1, -this.motionVelocityY)),  // Flip Y
       mode: this.mode,
       buffer: this.motionBuffer,
+      frameBuffer: this.frameBuffer,  // Low-res RGBA webcam frame
       width: this.captureWidth,
-      height: this.captureHeight
+      height: this.captureHeight,
+      // High-res display data
+      displayFrameBuffer: this.displayFrameBuffer,
+      displayWidth: this.displayWidth,
+      displayHeight: this.displayHeight
     };
   }
 
@@ -252,8 +288,14 @@ export default class WebcamAnalyzer {
     this.previousFrame = null;
     this.currentFrame = null;
     this.motionBuffer = null;
+    this.frameBuffer = null;
     this.canvas = null;
     this.ctx = null;
+
+    // Clear high-res display buffers
+    this.displayFrameBuffer = null;
+    this.displayCanvas = null;
+    this.displayCtx = null;
 
     this.isInitialized = false;
   }

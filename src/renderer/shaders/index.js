@@ -1023,6 +1023,43 @@ void main() {
 }
 `;
 
+const webcamFeedShader = `
+precision highp float;
+
+uniform sampler2D uWebcamTextureHD;
+uniform vec2 uResolution;
+uniform vec2 uWebcamHDResolution;
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / uResolution;
+
+    // Calculate aspect ratios for proper scaling
+    float screenAspect = uResolution.x / uResolution.y;
+    float webcamAspect = uWebcamHDResolution.x / uWebcamHDResolution.y;
+
+    vec2 webcamUV = uv;
+
+    // Fit webcam to screen while maintaining aspect ratio (cover mode)
+    if (screenAspect > webcamAspect) {
+        // Screen is wider - fit to width, crop top/bottom
+        float scale = screenAspect / webcamAspect;
+        webcamUV.y = (uv.y - 0.5) / scale + 0.5;
+    } else {
+        // Screen is taller - fit to height, crop sides
+        float scale = webcamAspect / screenAspect;
+        webcamUV.x = (uv.x - 0.5) / scale + 0.5;
+    }
+
+    // Flip Y to match webcam orientation
+    webcamUV.y = 1.0 - webcamUV.y;
+
+    // Sample HD webcam texture
+    vec4 color = texture2D(uWebcamTextureHD, webcamUV);
+
+    gl_FragColor = color;
+}
+`;
+
 // Export all shaders
 export default {
     shaders: [
@@ -1070,6 +1107,11 @@ export default {
             name: "Motion Paint",
             vertexShader: commonVertexShader,
             fragmentShader: motionPaintShader
+        },
+        {
+            name: "Webcam",
+            vertexShader: commonVertexShader,
+            fragmentShader: webcamFeedShader
         }
     ]
 };
