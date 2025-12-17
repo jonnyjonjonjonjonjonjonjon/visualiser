@@ -1,8 +1,12 @@
 const { app, BrowserWindow, ipcMain, globalShortcut } = require('electron');
 const path = require('path');
+const http = require('http');
 
 let mainWindow = null;
 let isAlwaysOnTop = false;
+let proxyServer = null;
+let currentProxyUrl = null;
+const PROXY_PORT = 9876;
 
 /**
  * Create the main application window
@@ -96,6 +100,14 @@ function toggleFullscreen() {
 
   // Notify renderer of fullscreen state change
   mainWindow.webContents.send('fullscreen-changed', !isFullScreen);
+
+  // Send resize event after fullscreen transition completes
+  setTimeout(() => {
+    if (mainWindow) {
+      const [width, height] = mainWindow.getContentSize();
+      mainWindow.webContents.send('window-resized', { width, height });
+    }
+  }, 150);
 }
 
 /**
@@ -244,13 +256,142 @@ function setupIpcHandlers() {
     }
   });
 
+  // Handle MJPEG proxy start request
+  ipcMain.handle('start-mjpeg-proxy', async (event, targetUrl) => {
+    try {
+      const result = await startMjpegProxy(targetUrl);
+      return result;
+    } catch (error) {
+      console.error('Error starting MJPEG proxy:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Handle MJPEG proxy stop request
+  ipcMain.handle('stop-mjpeg-proxy', async () => {
+    try {
+      stopMjpegProxy();
+      return { success: true };
+    } catch (error) {
+      console.error('Error stopping MJPEG proxy:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   console.log('IPC handlers set up successfully');
+}
+
+/**
+ * Start MJPEG proxy server
+ * Proxies an MJPEG stream through localhost to bypass CORS
+ * @param {string} targetUrl - The URL of the MJPEG stream to proxy
+ * @returns {Promise<{success: boolean, proxyUrl?: string, error?: string}>}
+ */
+function startMjpegProxy(targetUrl) {
+  return new Promise((resolve) => {
+    // Stop existing proxy if running
+    if (proxyServer) {
+      proxyServer.close();
+      proxyServer = null;
+    }
+
+    currentProxyUrl = targetUrl;
+
+    proxyServer = http.createServer((req, res) => {
+      // Add CORS headers
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', '*');
+
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+
+      // Parse the target URL
+      let parsedUrl;
+      try {
+        parsedUrl = new URL(currentProxyUrl);
+      } catch (e) {
+        res.writeHead(400);
+        res.end('Invalid target URL');
+        return;
+      }
+
+      // Create request to target
+      const proxyReq = http.request({
+        hostname: parsedUrl.hostname,
+        port: parsedUrl.port || 80,
+        path: parsedUrl.pathname + parsedUrl.search,
+        method: 'GET',
+        headers: {
+          'Accept': '*/*'
+        }
+      }, (proxyRes) => {
+        // Forward headers (especially content-type for MJPEG)
+        const headers = {
+          'Access-Control-Allow-Origin': '*',
+          'Content-Type': proxyRes.headers['content-type'] || 'multipart/x-mixed-replace'
+        };
+
+        res.writeHead(proxyRes.statusCode, headers);
+
+        // Pipe the stream
+        proxyRes.pipe(res);
+
+        // Handle client disconnect
+        res.on('close', () => {
+          proxyRes.destroy();
+        });
+      });
+
+      proxyReq.on('error', (err) => {
+        console.error('Proxy request error:', err.message);
+        if (!res.headersSent) {
+          res.writeHead(502);
+          res.end('Proxy error: ' + err.message);
+        }
+      });
+
+      proxyReq.end();
+    });
+
+    proxyServer.on('error', (err) => {
+      console.error('Proxy server error:', err);
+      resolve({ success: false, error: err.message });
+    });
+
+    proxyServer.listen(PROXY_PORT, '127.0.0.1', () => {
+      console.log(`MJPEG proxy started on port ${PROXY_PORT} for ${targetUrl}`);
+      resolve({
+        success: true,
+        proxyUrl: `http://127.0.0.1:${PROXY_PORT}/`
+      });
+    });
+  });
+}
+
+/**
+ * Stop MJPEG proxy server
+ */
+function stopMjpegProxy() {
+  if (proxyServer) {
+    proxyServer.close(() => {
+      console.log('MJPEG proxy stopped');
+    });
+    proxyServer = null;
+    currentProxyUrl = null;
+  }
 }
 
 /**
  * Clean up resources on app quit
  */
 function cleanup() {
+  // Stop proxy server
+  stopMjpegProxy();
+
   // Unregister all shortcuts
   globalShortcut.unregisterAll();
   console.log('Cleaned up global shortcuts');

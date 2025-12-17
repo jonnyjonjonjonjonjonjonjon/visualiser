@@ -127,6 +127,24 @@ export default class Visualizer {
     this.uniforms.uIPhoneTexture = { value: null };
     this.uniforms.uIPhoneResolution = { value: new THREE.Vector2(1280, 720) };
 
+    // Create high-res iPhone texture (1280x720 RGBA DataTexture for HD display)
+    this.iphoneHDWidth = 1280;
+    this.iphoneHDHeight = 720;
+    this.iphoneHDData = new Uint8Array(this.iphoneHDWidth * this.iphoneHDHeight * 4);
+    this.iphoneHDTexture = new THREE.DataTexture(
+      this.iphoneHDData,
+      this.iphoneHDWidth,
+      this.iphoneHDHeight,
+      THREE.RGBAFormat,
+      THREE.UnsignedByteType
+    );
+    this.iphoneHDTexture.minFilter = THREE.LinearFilter;
+    this.iphoneHDTexture.magFilter = THREE.LinearFilter;
+    this.iphoneHDTexture.needsUpdate = true;
+    this.uniforms.uIPhoneTextureHD = { value: this.iphoneHDTexture };
+    this.uniforms.uIPhoneHDResolution = { value: new THREE.Vector2(this.iphoneHDWidth, this.iphoneHDHeight) };
+    this.uniforms.uIPhoneCORSEnabled = { value: 0.0 };
+
     // Create spark particle system for Trails mode
     this.sparkSystem = new SparkParticleSystem(2000);
 
@@ -467,6 +485,96 @@ export default class Visualizer {
   }
 
   /**
+   * Update iPhone HD texture from image element (CORS mode)
+   * @param {HTMLImageElement} imgElement - Image element streaming MJPEG
+   */
+  updateIPhoneHDTexture(imgElement) {
+    if (!imgElement || imgElement.naturalWidth === 0) {
+      return;
+    }
+
+    const width = imgElement.naturalWidth;
+    const height = imgElement.naturalHeight;
+
+    // Create canvas if not exists
+    if (!this.iphoneHDCanvas) {
+      this.iphoneHDCanvas = document.createElement('canvas');
+      this.iphoneHDCtx = this.iphoneHDCanvas.getContext('2d', { willReadFrequently: true });
+    }
+
+    // Resize canvas if needed
+    if (this.iphoneHDCanvas.width !== width || this.iphoneHDCanvas.height !== height) {
+      this.iphoneHDCanvas.width = width;
+      this.iphoneHDCanvas.height = height;
+
+      // Resize HD texture data if needed
+      if (width !== this.iphoneHDWidth || height !== this.iphoneHDHeight) {
+        this.iphoneHDWidth = width;
+        this.iphoneHDHeight = height;
+        this.iphoneHDData = new Uint8Array(width * height * 4);
+        this.iphoneHDTexture.dispose();
+        this.iphoneHDTexture = new THREE.DataTexture(
+          this.iphoneHDData,
+          width,
+          height,
+          THREE.RGBAFormat,
+          THREE.UnsignedByteType
+        );
+        this.iphoneHDTexture.minFilter = THREE.LinearFilter;
+        this.iphoneHDTexture.magFilter = THREE.LinearFilter;
+        this.uniforms.uIPhoneTextureHD.value = this.iphoneHDTexture;
+      }
+    }
+
+    // Draw image to canvas
+    this.iphoneHDCtx.drawImage(imgElement, 0, 0);
+
+    // Get pixel data and update texture
+    const imageData = this.iphoneHDCtx.getImageData(0, 0, width, height);
+    this.iphoneHDData.set(imageData.data);
+    this.iphoneHDTexture.needsUpdate = true;
+
+    // Update resolution uniform
+    this.uniforms.uIPhoneHDResolution.value.set(width, height);
+  }
+
+  /**
+   * Update iPhone texture from IPhoneCameraSource motion data (CORS mode)
+   * @param {Object} iphoneMotionData - Motion data from IPhoneCameraSource.getMotionData()
+   */
+  updateIPhoneTextureFromMotionData(iphoneMotionData) {
+    if (!iphoneMotionData || !iphoneMotionData.displayFrameBuffer) {
+      return;
+    }
+
+    // Enable CORS mode in shader
+    this.uniforms.uIPhoneCORSEnabled.value = 1.0;
+
+    // Update HD resolution
+    this.uniforms.uIPhoneHDResolution.value.set(
+      iphoneMotionData.displayWidth || 1280,
+      iphoneMotionData.displayHeight || 720
+    );
+
+    // Update HD texture with frame buffer
+    if (iphoneMotionData.displayFrameBuffer.length > 0) {
+      const sourceLength = Math.min(iphoneMotionData.displayFrameBuffer.length, this.iphoneHDData.length);
+      for (let i = 0; i < sourceLength; i++) {
+        this.iphoneHDData[i] = iphoneMotionData.displayFrameBuffer[i];
+      }
+      this.iphoneHDTexture.needsUpdate = true;
+    }
+  }
+
+  /**
+   * Set iPhone CORS mode enabled state
+   * @param {boolean} enabled - Whether CORS is enabled
+   */
+  setIPhoneCORSEnabled(enabled) {
+    this.uniforms.uIPhoneCORSEnabled.value = enabled ? 1.0 : 0.0;
+  }
+
+  /**
    * Render the current scene
    */
   render() {
@@ -509,19 +617,23 @@ export default class Visualizer {
    * Handle window resize events
    */
   handleResize() {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
+    // Get the actual displayed size of the canvas
+    const displayWidth = this.canvas.clientWidth;
+    const displayHeight = this.canvas.clientHeight;
 
-    // Update canvas and renderer
-    this.canvas.width = width;
-    this.canvas.height = height;
-    this.renderer.setSize(width, height, false);
+    // Check if the canvas buffer size needs to change
+    const needResize = this.canvas.width !== displayWidth || this.canvas.height !== displayHeight;
+
+    if (needResize) {
+      // Update renderer size (this also sets canvas.width and canvas.height)
+      this.renderer.setSize(displayWidth, displayHeight, false);
+    }
 
     // Update resolution uniform to match
-    this.uniforms.uResolution.value.set(width, height);
+    this.uniforms.uResolution.value.set(displayWidth, displayHeight);
 
     // Recreate ping-pong targets at new size if they exist
-    if (this.pingPongTargets) {
+    if (needResize && this.pingPongTargets) {
       this.disposePingPongTargets();
       this.initPingPongTargets();
       this.clearPingPongTargets();
@@ -606,6 +718,9 @@ export default class Visualizer {
     if (this.iphoneTexture) {
       this.iphoneTexture.dispose();
       this.iphoneTexture = null;
+    }
+    if (this.iphoneHDTexture) {
+      this.iphoneHDTexture.dispose();
     }
     this.iphoneCanvas = null;
     this.iphoneCtx = null;

@@ -1060,16 +1060,60 @@ void main() {
 }
 `;
 
-// iPhone Camera shader - placeholder, actual feed displayed via img overlay
+// iPhone Camera shader - supports motion effects when CORS is available
+// When CORS is blocked, displays black and an img overlay shows the feed
+// When CORS works, this shader renders the feed with motion effects
 const iphoneCameraShader = `
 precision highp float;
 
+uniform sampler2D uIPhoneTextureHD;
 uniform vec2 uResolution;
+uniform vec2 uIPhoneHDResolution;
+uniform float uIPhoneCORSEnabled;
+uniform float uTime;
+${motionUniforms}
+
+${motionHelpers}
 
 void main() {
-    // Black background - the actual iPhone feed is displayed
-    // via an img element overlay on top of the canvas
-    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+    // If CORS not enabled, show black (img overlay handles display)
+    if (uIPhoneCORSEnabled < 0.5) {
+        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+        return;
+    }
+
+    vec2 originalUV = gl_FragCoord.xy / uResolution;
+
+    // Apply motion displacement if in push mode
+    vec2 uv = applyPushDisplace(originalUV);
+
+    // Calculate aspect ratios for proper scaling
+    float screenAspect = uResolution.x / uResolution.y;
+    float phoneAspect = uIPhoneHDResolution.x / uIPhoneHDResolution.y;
+
+    vec2 phoneUV = uv;
+
+    // Fit iPhone feed to screen while maintaining aspect ratio (cover mode)
+    if (screenAspect > phoneAspect) {
+        // Screen is wider - fit to width, crop top/bottom
+        float scale = screenAspect / phoneAspect;
+        phoneUV.y = (uv.y - 0.5) / scale + 0.5;
+    } else {
+        // Screen is taller - fit to height, crop sides
+        float scale = phoneAspect / screenAspect;
+        phoneUV.x = (uv.x - 0.5) / scale + 0.5;
+    }
+
+    // Flip Y to match camera orientation
+    phoneUV.y = 1.0 - phoneUV.y;
+
+    // Sample iPhone HD texture
+    vec3 color = texture2D(uIPhoneTextureHD, phoneUV).rgb;
+
+    // Apply paint trails if in predator mode
+    color = applyPaintTrails(color, originalUV, uTime);
+
+    gl_FragColor = vec4(color, 1.0);
 }
 `;
 

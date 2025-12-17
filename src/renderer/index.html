@@ -18,6 +18,21 @@
             background-color: #000;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             cursor: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Browser fullscreen styles */
+        html:fullscreen,
+        body:fullscreen,
+        :fullscreen {
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        #visualizer:fullscreen {
+            width: 100% !important;
+            height: 100% !important;
         }
 
         body.show-cursor {
@@ -25,8 +40,11 @@
         }
 
         #visualizer {
-            width: 100vw;
-            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             display: block;
         }
 
@@ -46,6 +64,58 @@
 
         body.show-cursor #overlay {
             opacity: 1;
+        }
+
+        /* Fullscreen button */
+        #fullscreen-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 44px;
+            height: 44px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: #fff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease, background 0.2s ease;
+            z-index: 1001;
+            backdrop-filter: blur(10px);
+            pointer-events: none;
+        }
+
+        body.show-cursor #fullscreen-btn {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        #fullscreen-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        #fullscreen-btn svg {
+            width: 22px;
+            height: 22px;
+        }
+
+        #fullscreen-btn .expand-icon {
+            display: block;
+        }
+
+        #fullscreen-btn .collapse-icon {
+            display: none;
+        }
+
+        #fullscreen-btn.is-fullscreen .expand-icon {
+            display: none;
+        }
+
+        #fullscreen-btn.is-fullscreen .collapse-icon {
+            display: block;
         }
 
         #scene-name {
@@ -434,6 +504,15 @@
 <body>
     <canvas id="visualizer"></canvas>
     <img id="iphone-feed" src="" alt="" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1;">
+
+    <button id="fullscreen-btn" title="Toggle Fullscreen (F)">
+        <svg class="expand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+        </svg>
+        <svg class="collapse-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 14h3a2 2 0 0 1 2 2v3m4-12V4a2 2 0 0 1 2-2h3M4 10h3a2 2 0 0 0 2-2V4m4 16v-3a2 2 0 0 1 2-2h3"/>
+        </svg>
+    </button>
 
     <div id="overlay">
         <div id="scene-name">Loading...</div>

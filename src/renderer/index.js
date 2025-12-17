@@ -24,6 +24,8 @@ const paintColorSpeedSlider = document.getElementById('paint-color-speed');
 const paintColorSpeedValueEl = document.getElementById('paint-color-speed-value');
 const paintFadeDelaySlider = document.getElementById('paint-fade-delay');
 const paintFadeDelayValueEl = document.getElementById('paint-fade-delay-value');
+// Fullscreen button
+const fullscreenBtn = document.getElementById('fullscreen-btn');
 // iPhone modal elements
 const iphoneModalEl = document.getElementById('iphone-modal');
 const iphoneUrlInput = document.getElementById('iphone-url');
@@ -80,9 +82,13 @@ function hideError() {
     errorEl.classList.remove('visible');
 }
 
-// Show/hide trails controls based on mode
+// Show/hide trails controls based on mode (webcam or iPhone)
 function updateTrailsControlsVisibility() {
-    if (webcamAnalyzer && webcamAnalyzer.getMode() === 3) {
+    const isWebcamTrails = webcamAnalyzer && webcamAnalyzer.getMode() === 3;
+    const isIPhoneTrails = iphoneSource && iphoneSource.hasCORS() && iphoneSource.getMode() === 3 &&
+                           visualizer && visualizer.getCurrentSceneName() === 'iPhone Camera';
+
+    if (isWebcamTrails || isIPhoneTrails) {
         trailsControlsEl.classList.add('visible');
     } else {
         trailsControlsEl.classList.remove('visible');
@@ -259,7 +265,20 @@ async function connectIPhone() {
         await iphoneSource.connect(url);
 
         hideIPhoneModal();
-        statusEl.textContent = 'iPhone camera connected';
+
+        // Show connection status with CORS info
+        if (iphoneSource.hasCORS()) {
+            statusEl.textContent = 'iPhone connected (effects available)';
+            // Set CORS flag in visualizer
+            if (visualizer) {
+                visualizer.setIPhoneCORSEnabled(true);
+            }
+        } else {
+            statusEl.textContent = 'iPhone connected (display only)';
+            if (visualizer) {
+                visualizer.setIPhoneCORSEnabled(false);
+            }
+        }
 
         // Store URL for reconnection
         localStorage.setItem('iphoneStreamUrl', url);
@@ -284,6 +303,10 @@ function disconnectIPhone() {
         iphoneSource = null;
         statusEl.textContent = 'iPhone camera disconnected';
     }
+    // Reset CORS flag in visualizer
+    if (visualizer) {
+        visualizer.setIPhoneCORSEnabled(false);
+    }
     // Hide the feed overlay
     iphoneFeedEl.style.display = 'none';
     iphoneFeedEl.src = '';
@@ -293,12 +316,71 @@ function disconnectIPhone() {
 function updateIPhoneFeedVisibility() {
     const isIPhoneScene = visualizer && visualizer.getCurrentSceneName() === 'iPhone Camera';
     const isConnected = iphoneSource && iphoneSource.isStreaming();
+    const hasCORS = iphoneSource && iphoneSource.hasCORS();
 
-    if (isIPhoneScene && isConnected) {
+    // Only show img overlay if:
+    // 1. On iPhone Camera scene
+    // 2. Connected to iPhone
+    // 3. CORS is NOT available (rendering via WebGL when CORS works)
+    if (isIPhoneScene && isConnected && !hasCORS) {
         iphoneFeedEl.src = iphoneSource.getUrl();
         iphoneFeedEl.style.display = 'block';
     } else {
         iphoneFeedEl.style.display = 'none';
+    }
+}
+
+// Initialize fullscreen button
+function initFullscreenButton() {
+    fullscreenBtn.addEventListener('click', async () => {
+        if (window.electronAPI) {
+            const result = await window.electronAPI.toggleFullscreen();
+            if (result && result.success) {
+                fullscreenBtn.classList.toggle('is-fullscreen', result.isFullScreen);
+                // Trigger resize after fullscreen transition
+                setTimeout(resizeCanvas, 100);
+            }
+        } else {
+            // Fallback for browser - use Fullscreen API on canvas element
+            if (!document.fullscreenElement) {
+                canvas.requestFullscreen().catch(err => {
+                    console.error('Fullscreen error:', err);
+                });
+                fullscreenBtn.classList.add('is-fullscreen');
+            } else {
+                document.exitFullscreen();
+                fullscreenBtn.classList.remove('is-fullscreen');
+            }
+            // Trigger resize multiple times to catch the fullscreen transition
+            setTimeout(resizeCanvas, 50);
+            setTimeout(resizeCanvas, 150);
+            setTimeout(resizeCanvas, 300);
+        }
+    });
+
+    // Listen for fullscreen changes from Electron (keyboard shortcuts F/F11)
+    if (window.electronAPI && window.electronAPI.onFullscreenChanged) {
+        window.electronAPI.onFullscreenChanged((isFullScreen) => {
+            fullscreenBtn.classList.toggle('is-fullscreen', isFullScreen);
+            // Trigger resize multiple times to catch the fullscreen transition
+            setTimeout(resizeCanvas, 50);
+            setTimeout(resizeCanvas, 150);
+            setTimeout(resizeCanvas, 300);
+        });
+    }
+
+    // Listen for fullscreen changes from browser Fullscreen API
+    document.addEventListener('fullscreenchange', () => {
+        fullscreenBtn.classList.toggle('is-fullscreen', !!document.fullscreenElement);
+        // Trigger resize after fullscreen transition
+        setTimeout(resizeCanvas, 100);
+    });
+
+    // Listen for window resize events from Electron main process
+    if (window.electronAPI && window.electronAPI.onWindowResized) {
+        window.electronAPI.onWindowResized(() => {
+            resizeCanvas();
+        });
     }
 }
 
@@ -356,15 +438,43 @@ function initVisualizer() {
 
 // Render loop
 function render() {
+    // Check if canvas needs resizing (handles fullscreen and window changes)
+    if (visualizer) {
+        const canvas = document.getElementById('visualizer');
+        if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
+            visualizer.handleResize();
+        }
+    }
+
     if (!isPaused && audioAnalyzer && visualizer) {
         const audioData = audioAnalyzer.getAudioData();
-        const motionData = webcamAnalyzer ? webcamAnalyzer.getMotionData() : null;
+        const currentScene = visualizer.getCurrentSceneName();
+
+        // Choose motion source based on current scene
+        let motionData = null;
+
+        if (currentScene === 'iPhone Camera' && iphoneSource && iphoneSource.hasCORS() && iphoneSource.isActive()) {
+            // Use iPhone motion data when on iPhone Camera scene with CORS and effects enabled
+            motionData = iphoneSource.getMotionData();
+
+            // Update iPhone HD texture from motion data
+            if (motionData) {
+                visualizer.updateIPhoneTextureFromMotionData(motionData);
+            }
+        } else if (webcamAnalyzer) {
+            // Use webcam motion data for all other scenes
+            motionData = webcamAnalyzer.getMotionData();
+        }
+
         visualizer.update(audioData, motionData);
 
-        // Update iPhone texture if connected
-        if (iphoneSource && iphoneSource.isStreaming()) {
+        // Update iPhone texture when on iPhone Camera scene with CORS
+        if (currentScene === 'iPhone Camera' && iphoneSource && iphoneSource.isStreaming() && iphoneSource.hasCORS()) {
+            // Always update the HD texture for display
             const imgElement = iphoneSource.getImageElement();
-            visualizer.updateIPhoneTexture(imgElement);
+            if (imgElement) {
+                visualizer.updateIPhoneHDTexture(imgElement);
+            }
         }
 
         visualizer.render();
@@ -435,7 +545,13 @@ function handleKeyPress(event) {
 
         case 'c':
         case 'C':
-            if (webcamAnalyzer) {
+            // Check if we're on iPhone Camera scene with CORS available
+            if (visualizer.getCurrentSceneName() === 'iPhone Camera' && iphoneSource && iphoneSource.hasCORS()) {
+                const modeName = iphoneSource.cycleMode();
+                statusEl.textContent = `iPhone: ${modeName}`;
+                updateTrailsControlsVisibility();
+                updateTrailsControlsUI();
+            } else if (webcamAnalyzer) {
                 const modeName = webcamAnalyzer.cycleMode();
                 statusEl.textContent = `Webcam: ${modeName}`;
                 updateTrailsControlsVisibility();
@@ -447,31 +563,46 @@ function handleKeyPress(event) {
 
         case 'v':
         case 'V':
-            // Cycle spark color mode (only in Trails mode)
-            if (webcamAnalyzer && webcamAnalyzer.getMode() === 3 && visualizer) {
-                const colorMode = visualizer.cycleSparkColorMode();
-                statusEl.textContent = `Spark Color: ${colorMode}`;
-                updateTrailsControlsUI();
+            // Cycle spark color mode (only in Trails mode - webcam or iPhone)
+            {
+                const isWebcamTrails = webcamAnalyzer && webcamAnalyzer.getMode() === 3;
+                const isIPhoneTrails = iphoneSource && iphoneSource.hasCORS() && iphoneSource.getMode() === 3 &&
+                                       visualizer.getCurrentSceneName() === 'iPhone Camera';
+                if ((isWebcamTrails || isIPhoneTrails) && visualizer) {
+                    const colorMode = visualizer.cycleSparkColorMode();
+                    statusEl.textContent = `Spark Color: ${colorMode}`;
+                    updateTrailsControlsUI();
+                }
             }
             break;
 
         case '+':
         case '=':
-            // Increase spark density (only in Trails mode)
-            if (webcamAnalyzer && webcamAnalyzer.getMode() === 3 && visualizer) {
-                const density = visualizer.adjustSparkDensity(0.25);
-                statusEl.textContent = `Spark Density: ${(density * 100).toFixed(0)}%`;
-                updateTrailsControlsUI();
+            // Increase spark density (only in Trails mode - webcam or iPhone)
+            {
+                const isWebcamTrails = webcamAnalyzer && webcamAnalyzer.getMode() === 3;
+                const isIPhoneTrails = iphoneSource && iphoneSource.hasCORS() && iphoneSource.getMode() === 3 &&
+                                       visualizer.getCurrentSceneName() === 'iPhone Camera';
+                if ((isWebcamTrails || isIPhoneTrails) && visualizer) {
+                    const density = visualizer.adjustSparkDensity(0.25);
+                    statusEl.textContent = `Spark Density: ${(density * 100).toFixed(0)}%`;
+                    updateTrailsControlsUI();
+                }
             }
             break;
 
         case '-':
         case '_':
-            // Decrease spark density (only in Trails mode)
-            if (webcamAnalyzer && webcamAnalyzer.getMode() === 3 && visualizer) {
-                const density = visualizer.adjustSparkDensity(-0.25);
-                statusEl.textContent = `Spark Density: ${(density * 100).toFixed(0)}%`;
-                updateTrailsControlsUI();
+            // Decrease spark density (only in Trails mode - webcam or iPhone)
+            {
+                const isWebcamTrails = webcamAnalyzer && webcamAnalyzer.getMode() === 3;
+                const isIPhoneTrails = iphoneSource && iphoneSource.hasCORS() && iphoneSource.getMode() === 3 &&
+                                       visualizer.getCurrentSceneName() === 'iPhone Camera';
+                if ((isWebcamTrails || isIPhoneTrails) && visualizer) {
+                    const density = visualizer.adjustSparkDensity(-0.25);
+                    statusEl.textContent = `Spark Density: ${(density * 100).toFixed(0)}%`;
+                    updateTrailsControlsUI();
+                }
             }
             break;
 
@@ -516,13 +647,16 @@ async function init() {
 
     const audioInitialized = await initAudio();
 
-    if (audioInitialized) {
-        resizeCanvas();
-        initVisualizer();
-        initTrailsControls();
-        initPaintControls();
-        initIPhoneControls();
+    // Continue even without audio (for testing iPhone camera, etc.)
+    resizeCanvas();
+    initVisualizer();
+    initTrailsControls();
+    initPaintControls();
+    initIPhoneControls();
+    initFullscreenButton();
+    hideError();
 
+    if (audioInitialized) {
         // Initialize webcam analyzer (non-blocking, graceful failure)
         try {
             webcamAnalyzer = new WebcamAnalyzer();
@@ -537,16 +671,18 @@ async function init() {
                 statusEl.textContent = 'Ready - Press H for help';
             }, 3000);
         }
-
-        // Start render loop
-        render();
-
-        // Show cursor briefly at start
-        document.body.classList.add('show-cursor');
-        setTimeout(() => {
-            document.body.classList.remove('show-cursor');
-        }, 3000);
+    } else {
+        statusEl.textContent = 'No audio - Press I for iPhone camera';
     }
+
+    // Start render loop
+    render();
+
+    // Show cursor briefly at start
+    document.body.classList.add('show-cursor');
+    setTimeout(() => {
+        document.body.classList.remove('show-cursor');
+    }, 3000);
 }
 
 // Start the app

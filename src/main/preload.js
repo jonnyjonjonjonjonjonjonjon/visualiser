@@ -37,5 +37,44 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => {
       ipcRenderer.removeListener('audio-data', subscription);
     };
+  },
+
+  /**
+   * Start MJPEG proxy server for iPhone camera stream
+   * @param {string} targetUrl - The MJPEG stream URL to proxy
+   * @returns {Promise<{success: boolean, proxyUrl?: string, error?: string}>}
+   */
+  startMjpegProxy: (targetUrl) => ipcRenderer.invoke('start-mjpeg-proxy', targetUrl),
+
+  /**
+   * Stop MJPEG proxy server
+   * @returns {Promise<{success: boolean, error?: string}>}
+   */
+  stopMjpegProxy: () => ipcRenderer.invoke('stop-mjpeg-proxy'),
+
+  /**
+   * Register callback for fullscreen state changes
+   * @param {Function} callback - Function to handle fullscreen changes
+   * @returns {Function} Cleanup function to remove listener
+   */
+  onFullscreenChanged: (callback) => {
+    const subscription = (event, isFullScreen) => callback(isFullScreen);
+    ipcRenderer.on('fullscreen-changed', subscription);
+    return () => {
+      ipcRenderer.removeListener('fullscreen-changed', subscription);
+    };
+  },
+
+  /**
+   * Register callback for window resize events
+   * @param {Function} callback - Function to handle resize with {width, height}
+   * @returns {Function} Cleanup function to remove listener
+   */
+  onWindowResized: (callback) => {
+    const subscription = (event, size) => callback(size);
+    ipcRenderer.on('window-resized', subscription);
+    return () => {
+      ipcRenderer.removeListener('window-resized', subscription);
+    };
   }
 });
