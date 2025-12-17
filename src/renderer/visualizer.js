@@ -50,7 +50,10 @@ export default class Visualizer {
       uMotionTexture: { value: null },
       // Motion Paint uniforms
       uPrevFrame: { value: null },
-      uDeltaTime: { value: 0.016 }
+      uDeltaTime: { value: 0.016 },
+      uPaintSensitivity: { value: 0.15 },
+      uPaintColorSpeed: { value: 0.05 },
+      uPaintFadeDelay: { value: 10.0 }
     };
 
     // Beat decay value for smooth beat response

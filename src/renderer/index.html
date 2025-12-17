@@ -218,10 +218,84 @@
             cursor: pointer;
         }
 
-        #trails-controls #density-value {
+        #trails-controls #density-value,
+        #trails-controls #particles-value,
+        #trails-controls #size-value {
             min-width: 40px;
             text-align: right;
             color: #ff9632;
+            font-weight: 500;
+        }
+
+        /* Paint controls - same styling as trails controls */
+        #paint-controls {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 20px;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 13px;
+            pointer-events: auto;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        body.show-cursor #paint-controls.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        #paint-controls .control-group {
+            margin-bottom: 12px;
+        }
+
+        #paint-controls .control-group:last-child {
+            margin-bottom: 0;
+        }
+
+        #paint-controls label {
+            display: block;
+            margin-bottom: 6px;
+            color: #aaa;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        #paint-controls .slider-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #paint-controls input[type="range"] {
+            flex: 1;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        #paint-controls input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            background: #32b4ff;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        #paint-controls .slider-value {
+            min-width: 40px;
+            text-align: right;
+            color: #32b4ff;
             font-weight: 500;
         }
     </style>
@@ -300,6 +374,30 @@
             <div class="slider-row">
                 <input type="range" id="size-slider" min="-90" max="300" value="0" step="10">
                 <span id="size-value">100%</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="paint-controls">
+        <div class="control-group">
+            <label>Sensitivity</label>
+            <div class="slider-row">
+                <input type="range" id="paint-sensitivity" min="5" max="50" value="15">
+                <span id="paint-sensitivity-value" class="slider-value">15%</span>
+            </div>
+        </div>
+        <div class="control-group">
+            <label>Color Speed</label>
+            <div class="slider-row">
+                <input type="range" id="paint-color-speed" min="1" max="20" value="5">
+                <span id="paint-color-speed-value" class="slider-value">5</span>
+            </div>
+        </div>
+        <div class="control-group">
+            <label>Fade Delay</label>
+            <div class="slider-row">
+                <input type="range" id="paint-fade-delay" min="2" max="30" value="10">
+                <span id="paint-fade-delay-value" class="slider-value">10s</span>
             </div>
         </div>
     </div>

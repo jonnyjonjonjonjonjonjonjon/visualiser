@@ -980,6 +980,11 @@ uniform float uTime;
 uniform float uDeltaTime;
 uniform vec2 uResolution;
 
+// Configurable parameters
+uniform float uPaintSensitivity;  // Motion threshold (default 0.15)
+uniform float uPaintColorSpeed;   // Hue cycle speed (default 0.05)
+uniform float uPaintFadeDelay;    // Seconds before fading (default 10.0)
+
 // HSV to RGB conversion
 vec3 hsv2rgb(vec3 c) {
     vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
@@ -996,15 +1001,15 @@ void main() {
     // Sample motion texture (flip Y for webcam coords)
     float motion = texture2D(uMotionTexture, vec2(uv.x, 1.0 - uv.y)).r;
 
-    // Motion threshold (~38/255 normalized)
-    if (motion > 0.15) {
-        // Paint with time-based hue (cycle every ~20 seconds)
-        float hue = fract(uTime * 0.05);
+    // Check motion against sensitivity threshold
+    if (motion > uPaintSensitivity) {
+        // Paint with time-based hue
+        float hue = fract(uTime * uPaintColorSpeed);
         vec3 color = hsv2rgb(vec3(hue, 0.9, 1.0));
         gl_FragColor = vec4(color, 0.0);  // Reset age to 0
     } else {
         // No motion - age the pixel
-        float newAge = prev.a + uDeltaTime / 10.0;  // 10 seconds to reach 1.0
+        float newAge = prev.a + uDeltaTime / uPaintFadeDelay;
 
         if (newAge > 1.0) {
             // Fade toward black

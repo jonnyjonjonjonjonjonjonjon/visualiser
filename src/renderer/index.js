@@ -15,6 +15,14 @@ const particlesSlider = document.getElementById('particles-slider');
 const particlesValueEl = document.getElementById('particles-value');
 const sizeSlider = document.getElementById('size-slider');
 const sizeValueEl = document.getElementById('size-value');
+// Paint controls
+const paintControlsEl = document.getElementById('paint-controls');
+const paintSensitivitySlider = document.getElementById('paint-sensitivity');
+const paintSensitivityValueEl = document.getElementById('paint-sensitivity-value');
+const paintColorSpeedSlider = document.getElementById('paint-color-speed');
+const paintColorSpeedValueEl = document.getElementById('paint-color-speed-value');
+const paintFadeDelaySlider = document.getElementById('paint-fade-delay');
+const paintFadeDelayValueEl = document.getElementById('paint-fade-delay-value');
 
 // App state
 let audioAnalyzer = null;
@@ -134,6 +142,62 @@ function initTrailsControls() {
     });
 }
 
+// Show/hide paint controls based on current visualization
+function updatePaintControlsVisibility() {
+    if (visualizer && visualizer.getCurrentSceneName() === 'Motion Paint') {
+        paintControlsEl.classList.add('visible');
+    } else {
+        paintControlsEl.classList.remove('visible');
+    }
+}
+
+// Update paint controls UI to match current settings
+function updatePaintControlsUI() {
+    if (!visualizer) return;
+
+    // Sensitivity: slider value 5-50, uniform value 0.05-0.50
+    const sensitivity = visualizer.uniforms.uPaintSensitivity.value;
+    paintSensitivitySlider.value = Math.round(sensitivity * 100);
+    paintSensitivityValueEl.textContent = `${Math.round(sensitivity * 100)}%`;
+
+    // Color speed: slider value 1-20, uniform value 0.01-0.20
+    const colorSpeed = visualizer.uniforms.uPaintColorSpeed.value;
+    paintColorSpeedSlider.value = Math.round(colorSpeed * 100);
+    paintColorSpeedValueEl.textContent = Math.round(colorSpeed * 100).toString();
+
+    // Fade delay: slider value 2-30, uniform value 2.0-30.0
+    const fadeDelay = visualizer.uniforms.uPaintFadeDelay.value;
+    paintFadeDelaySlider.value = Math.round(fadeDelay);
+    paintFadeDelayValueEl.textContent = `${Math.round(fadeDelay)}s`;
+}
+
+// Initialize paint controls event listeners
+function initPaintControls() {
+    // Sensitivity slider
+    paintSensitivitySlider.addEventListener('input', () => {
+        if (!visualizer) return;
+        const sensitivity = parseInt(paintSensitivitySlider.value) / 100;
+        visualizer.uniforms.uPaintSensitivity.value = sensitivity;
+        paintSensitivityValueEl.textContent = `${paintSensitivitySlider.value}%`;
+    });
+
+    // Color speed slider
+    paintColorSpeedSlider.addEventListener('input', () => {
+        if (!visualizer) return;
+        const colorSpeed = parseInt(paintColorSpeedSlider.value) / 100;
+        visualizer.uniforms.uPaintColorSpeed.value = colorSpeed;
+        paintColorSpeedValueEl.textContent = paintColorSpeedSlider.value;
+    });
+
+    // Fade delay slider
+    paintFadeDelaySlider.addEventListener('input', () => {
+        if (!visualizer) return;
+        const fadeDelay = parseInt(paintFadeDelaySlider.value);
+        visualizer.uniforms.uPaintFadeDelay.value = fadeDelay;
+        paintFadeDelayValueEl.textContent = `${fadeDelay}s`;
+    });
+}
+
 // Initialize audio
 async function initAudio() {
     try {
@@ -178,11 +242,13 @@ function handleKeyPress(event) {
         case 'ArrowLeft':
             visualizer.previousScene();
             updateSceneName(visualizer.getCurrentSceneName());
+            updatePaintControlsVisibility();
             break;
 
         case 'ArrowRight':
             visualizer.nextScene();
             updateSceneName(visualizer.getCurrentSceneName());
+            updatePaintControlsVisibility();
             break;
 
         case ' ':
@@ -274,6 +340,7 @@ function handleKeyPress(event) {
             if (num >= 1 && num <= 9) {
                 visualizer.setScene(num - 1);
                 updateSceneName(visualizer.getCurrentSceneName());
+                updatePaintControlsVisibility();
             }
             break;
     }
@@ -295,6 +362,7 @@ async function init() {
         resizeCanvas();
         initVisualizer();
         initTrailsControls();
+        initPaintControls();
 
         // Initialize webcam analyzer (non-blocking, graceful failure)
         try {
