@@ -297,8 +297,8 @@ void main() {
     float wallGlow = pow(radius, 0.3) * uBass * 1.2;
     col += vec3(1.0, 0.2, 0.5) * wallGlow;
 
-    // Treble adds subtle sparkle to the walls
-    float sparkle = fract(sin(dot(uv * 100.0, vec2(12.9898, 78.233))) * 43758.5453);
+    // Treble adds subtle sparkle to the walls (optimized: simpler hash)
+    float sparkle = fract(uv.x * 127.1 + uv.y * 311.7);
     col += vec3(0.3, 0.5, 0.8) * sparkle * uTreble * 0.2 * rings;
 
     // Mid frequencies pulse the ring patterns
@@ -358,13 +358,12 @@ void main() {
 
     float time = uTime * 0.5;
 
-    // Multiple plasma layers with different frequencies
-    float layer1 = plasma(center * 3.0, time, 5.0 + uBass * 3.0, 6.0);
+    // Two plasma layers (optimized from 3 - saves 4 sin() calls per pixel)
+    float layer1 = plasma(center * 3.0, time, 5.0 + uBass * 3.0, 6.0 + uTreble * 2.0);
     float layer2 = plasma(center * 2.0, time * 1.5, 7.0 + uMid * 2.0, 4.0);
-    float layer3 = plasma(center * 4.0, time * 0.8, 3.0 + uTreble * 4.0, 8.0);
 
     // Combine layers
-    float combined = (layer1 + layer2 * 0.7 + layer3 * 0.5) / 2.2;
+    float combined = (layer1 + layer2 * 0.8) / 1.8;
 
     // Beat pulse
     combined += uBeat * 0.3;
@@ -448,11 +447,10 @@ vec3 kaleidoPattern(vec2 uv, float time) {
 
     vec2 swirled = vec2(cos(angle), sin(angle)) * radius;
 
-    // Layered patterns
+    // Layered patterns (optimized: 1 noise call instead of 2)
     float pattern = 0.0;
-    pattern += noise(swirled * 3.0 + time * 0.2);
-    pattern += noise(swirled * 6.0 - time * 0.3) * 0.5;
-    pattern += sin(radius * 10.0 - time * 2.0) * 0.3;
+    pattern += noise(swirled * 4.0 + time * 0.2);
+    pattern += sin(radius * 10.0 - time * 2.0) * 0.4;
 
     // Color palette based on angle and radius
     vec3 col1 = vec3(0.8, 0.2, 0.5) + vec3(uBass * 0.3);
@@ -511,159 +509,6 @@ void main() {
 }
 `;
 
-const waveformTerrainShader = `
-precision highp float;
-
-uniform float uTime;
-uniform vec2 uResolution;
-uniform float uBass;
-uniform float uMid;
-uniform float uTreble;
-uniform float uEnergy;
-uniform float uBeat;
-uniform sampler2D uSpectrum;
-${motionUniforms}
-
-#define PI 3.14159265359
-
-${motionHelpers}
-
-mat3 rotateY(float angle) {
-    float c = cos(angle);
-    float s = sin(angle);
-    return mat3(
-        c, 0.0, s,
-        0.0, 1.0, 0.0,
-        -s, 0.0, c
-    );
-}
-
-mat3 rotateX(float angle) {
-    float c = cos(angle);
-    float s = sin(angle);
-    return mat3(
-        1.0, 0.0, 0.0,
-        0.0, c, -s,
-        0.0, s, c
-    );
-}
-
-float getTerrainHeight(vec2 pos, float time) {
-    // Sample from spectrum based on position (scaled to mic frequency range)
-    float maxFreqRange = 0.25;
-    float spectrumX = fract(pos.x * 0.05) * maxFreqRange;
-    float spectrumSample = texture2D(uSpectrum, vec2(spectrumX, 0.5)).r;
-
-    // Base terrain wave
-    float height = sin(pos.x * 0.5 + time) * 0.3;
-    height += sin(pos.x * 0.3 - time * 0.7) * 0.2;
-
-    // Add spectrum data
-    height += spectrumSample * (2.0 + uBass * 3.0);
-
-    // Add traveling wave
-    height += sin(pos.x * 0.8 - pos.y * 0.5 + time * 2.0) * 0.4 * uMid;
-
-    return height;
-}
-
-vec3 getNormal(vec2 pos, float time) {
-    float eps = 0.01;
-    float h = getTerrainHeight(pos, time);
-    float hx = getTerrainHeight(pos + vec2(eps, 0.0), time);
-    float hz = getTerrainHeight(pos + vec2(0.0, eps), time);
-    return normalize(vec3(h - hx, eps * 2.0, h - hz));
-}
-
-void main() {
-    vec2 originalUV = gl_FragCoord.xy / uResolution.xy;
-    vec2 screenUV = applyPushDisplace(originalUV);
-    vec2 uv = (screenUV * uResolution.xy - 0.5 * uResolution.xy) / uResolution.y;
-
-    // Camera setup - flying over terrain
-    vec3 camPos = vec3(0.0, 3.0 + uBeat * 0.5, uTime * 2.0);
-    vec3 lookAt = vec3(0.0, 0.0, camPos.z + 5.0);
-
-    // Camera rotation based on mid frequencies
-    float camAngle = sin(uTime * 0.3) * 0.3 * uMid;
-
-    vec3 forward = normalize(lookAt - camPos);
-    vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), forward));
-    vec3 up = cross(forward, right);
-
-    vec3 rayDir = normalize(forward + uv.x * right + uv.y * up);
-
-    // Raymarch terrain
-    vec3 col = vec3(0.0);
-    float t = 0.0;
-    bool hit = false;
-
-    for(int i = 0; i < 100; i++) {
-        vec3 pos = camPos + rayDir * t;
-        float terrainHeight = getTerrainHeight(pos.xz, uTime);
-
-        if(pos.y < terrainHeight) {
-            hit = true;
-
-            // Get normal for lighting
-            vec3 normal = getNormal(pos.xz, uTime);
-
-            // Neon grid lines
-            vec2 grid = fract(pos.xz * 2.0);
-            float gridLine = min(
-                smoothstep(0.02, 0.0, grid.x) + smoothstep(0.98, 1.0, grid.x),
-                smoothstep(0.02, 0.0, grid.y) + smoothstep(0.98, 1.0, grid.y)
-            );
-
-            // Base color - neon cyan/magenta
-            vec3 baseCol = vec3(0.0, 0.8, 1.0) * (1.0 + uBass);
-            vec3 gridCol = vec3(1.0, 0.0, 0.8) * (1.0 + uTreble);
-
-            // Mix base and grid
-            col = mix(baseCol * 0.3, gridCol, gridLine);
-
-            // Lighting
-            vec3 lightDir = normalize(vec3(0.5, 1.0, -0.3));
-            float diffuse = max(0.0, dot(normal, lightDir));
-            col *= 0.5 + diffuse * 0.5;
-
-            // Distance fog
-            float fog = exp(-t * 0.1);
-            col *= fog;
-
-            // Add glow based on height
-            col += vec3(0.5, 0.1, 0.8) * (terrainHeight * 0.2) * uEnergy;
-
-            break;
-        }
-
-        t += 0.1;
-        if(t > 50.0) break;
-    }
-
-    if(!hit) {
-        // Sky gradient
-        col = mix(
-            vec3(0.1, 0.0, 0.2),
-            vec3(0.0, 0.2, 0.4),
-            uv.y * 0.5 + 0.5
-        );
-
-        // Stars
-        float stars = step(0.99, fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453));
-        col += vec3(stars * 0.5);
-    }
-
-    // Beat flash
-    col += vec3(uBeat * 0.2);
-
-    // Apply webcam effects
-    col = applyPaintTrails(col, originalUV, uTime);
-
-    gl_FragColor = vec4(col, 1.0);
-}
-`;
-
 const nebulaParticlesShader = `
 precision highp float;
 
@@ -703,13 +548,13 @@ float noise(vec3 x) {
     );
 }
 
-// Fractal Brownian Motion
+// Fractal Brownian Motion (optimized: 3 iterations instead of 5)
 float fbm(vec3 p) {
     float value = 0.0;
     float amplitude = 0.5;
     float frequency = 1.0;
 
-    for(int i = 0; i < 5; i++) {
+    for(int i = 0; i < 3; i++) {
         value += amplitude * noise(p * frequency);
         frequency *= 2.0;
         amplitude *= 0.5;
@@ -741,12 +586,9 @@ void main() {
     pos.z = uTime * 0.3;
     pos.xy += vec2(sin(uTime * 0.1), cos(uTime * 0.15));
 
-    // Sample noise at multiple scales
+    // Sample noise at multiple scales (optimized: 2 fbm calls instead of 3)
     float nebula = fbm(pos * 2.0 + uBass * 0.5);
-
-    // Add finer details
-    nebula += fbm(pos * 4.0 + uMid * 0.3) * 0.5;
-    nebula += fbm(pos * 8.0 + uTreble * 0.2) * 0.25;
+    nebula += fbm(pos * 5.0 + uMid * 0.3 + uTreble * 0.2) * 0.5;
 
     // Enhance contrast
     nebula = pow(nebula, 1.5);
@@ -856,13 +698,13 @@ float flowerOfLife(vec2 uv, float scale, float time) {
     return pattern;
 }
 
-// Metatron's Cube
+// Metatron's Cube (optimized - reduced from 13 to 7 points)
 float metatronsCube(vec2 uv, float scale, float time) {
     uv *= scale;
     float pattern = 1.0;
 
-    // 13 circles
-    vec2 centers[13];
+    // 7 circles: center + 6 surrounding (reduced from 13)
+    vec2 centers[7];
     centers[0] = vec2(0.0, 0.0);
 
     float radius = 1.5;
@@ -871,21 +713,15 @@ float metatronsCube(vec2 uv, float scale, float time) {
         centers[i + 1] = vec2(cos(angle), sin(angle)) * radius;
     }
 
-    float radius2 = 3.0;
-    for(int i = 0; i < 6; i++) {
-        float angle = float(i) * TAU / 6.0 + TAU / 12.0 + time * 0.5;
-        centers[i + 7] = vec2(cos(angle), sin(angle)) * radius2;
-    }
-
     // Draw circles
-    for(int i = 0; i < 13; i++) {
+    for(int i = 0; i < 7; i++) {
         pattern = min(pattern, abs(circle(uv - centers[i], 0.5)) - 0.02);
     }
 
-    // Connect with lines
+    // Connect with lines (21 iterations instead of 66)
     float lineThickness = 0.015;
-    for(int i = 1; i < 13; i++) {
-        for(int j = i + 1; j < 13; j++) {
+    for(int i = 0; i < 7; i++) {
+        for(int j = i + 1; j < 7; j++) {
             float dist = line(uv, centers[i], centers[j], lineThickness);
             pattern = min(pattern, dist);
         }
@@ -1139,11 +975,6 @@ export default {
             name: "Kaleidoscope",
             vertexShader: commonVertexShader,
             fragmentShader: kaleidoscopeShader
-        },
-        {
-            name: "Waveform Terrain",
-            vertexShader: commonVertexShader,
-            fragmentShader: waveformTerrainShader
         },
         {
             name: "Nebula Particles",
