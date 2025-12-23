@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, globalShortcut, session } = require('electron');
 const path = require('path');
 const http = require('http');
 
@@ -400,6 +400,25 @@ function cleanup() {
 // App event handlers
 app.whenReady().then(() => {
   console.log('App is ready, creating window...');
+
+  // Grant audio/video permissions automatically
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    const allowedPermissions = ['media', 'audioCapture', 'mediaKeySystem'];
+    if (allowedPermissions.includes(permission)) {
+      console.log(`Granting permission: ${permission}`);
+      callback(true);
+    } else {
+      console.log(`Denying permission: ${permission}`);
+      callback(false);
+    }
+  });
+
+  // Also handle permission checks
+  session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
+    const allowedPermissions = ['media', 'audioCapture', 'mediaKeySystem'];
+    return allowedPermissions.includes(permission);
+  });
+
   setupIpcHandlers();
   createWindow();
 

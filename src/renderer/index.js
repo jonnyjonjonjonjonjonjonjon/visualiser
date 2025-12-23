@@ -43,6 +43,7 @@ let iphoneSource = null;
 let isPaused = false;
 let isHelpVisible = false;
 let mouseTimeout = null;
+let statusTimeout = null;
 
 // Handle resize events
 function resizeCanvas() {
@@ -65,9 +66,30 @@ function handleMouseMove() {
     }, 2000);
 }
 
-// Update scene name in UI
+// Update scene name in UI and keep overlay visible
 function updateSceneName(name) {
     sceneNameEl.textContent = name;
+    document.body.classList.add('show-cursor');
+
+    clearTimeout(statusTimeout);
+    clearTimeout(mouseTimeout);
+
+    statusTimeout = setTimeout(() => {
+        document.body.classList.remove('show-cursor');
+    }, 3000);
+}
+
+// Show status message and keep UI visible for a few seconds
+function showStatus(message, duration = 3000) {
+    statusEl.textContent = message;
+    document.body.classList.add('show-cursor');
+
+    clearTimeout(statusTimeout);
+    clearTimeout(mouseTimeout);
+
+    statusTimeout = setTimeout(() => {
+        document.body.classList.remove('show-cursor');
+    }, duration);
 }
 
 // Show error message
@@ -268,13 +290,13 @@ async function connectIPhone() {
 
         // Show connection status with CORS info
         if (iphoneSource.hasCORS()) {
-            statusEl.textContent = 'iPhone connected (effects available)';
+            showStatus('iPhone connected (effects available)');
             // Set CORS flag in visualizer
             if (visualizer) {
                 visualizer.setIPhoneCORSEnabled(true);
             }
         } else {
-            statusEl.textContent = 'iPhone connected (display only)';
+            showStatus('iPhone connected (display only)');
             if (visualizer) {
                 visualizer.setIPhoneCORSEnabled(false);
             }
@@ -301,7 +323,7 @@ function disconnectIPhone() {
     if (iphoneSource) {
         iphoneSource.destroy();
         iphoneSource = null;
-        statusEl.textContent = 'iPhone camera disconnected';
+        showStatus('iPhone camera disconnected');
     }
     // Reset CORS flag in visualizer
     if (visualizer) {
@@ -416,15 +438,33 @@ function initIPhoneControls() {
 async function initAudio() {
     try {
         statusEl.textContent = 'Requesting microphone access...';
+        console.log('Initializing audio analyzer...');
+
+        // Check if mediaDevices API is available (requires secure context)
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+            throw new Error('Media devices not available (requires HTTPS or localhost)');
+        }
+
+        // Check available devices first
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioInputs = devices.filter(d => d.kind === 'audioinput');
+        console.log('Available audio inputs:', audioInputs.length, audioInputs);
+
+        if (audioInputs.length === 0) {
+            throw new Error('No audio input devices found');
+        }
+
         audioAnalyzer = new AudioAnalyzer();
         await audioAnalyzer.init();
+        console.log('Audio analyzer initialized successfully');
         statusEl.textContent = 'Audio ready';
         hideError();
         return true;
     } catch (error) {
         console.error('Failed to initialize audio:', error);
-        statusEl.textContent = 'Audio initialization failed';
-        showError('This visualizer needs access to your microphone to analyze audio. Please grant permission and reload the application.');
+        statusEl.textContent = 'No audio';
+        // Don't show error overlay - just log it
+        console.warn('Audio not available:', error.message);
         return false;
     }
 }
@@ -446,8 +486,16 @@ function render() {
         }
     }
 
-    if (!isPaused && audioAnalyzer && visualizer) {
-        const audioData = audioAnalyzer.getAudioData();
+    if (!isPaused && visualizer) {
+        // Get audio data if available, otherwise use defaults
+        const audioData = audioAnalyzer ? audioAnalyzer.getAudioData() : {
+            bass: 0,
+            mid: 0,
+            treble: 0,
+            energy: 0,
+            beat: false,
+            spectrum: new Uint8Array(512)
+        };
         const currentScene = visualizer.getCurrentSceneName();
 
         // Choose motion source based on current scene
@@ -505,7 +553,7 @@ function handleKeyPress(event) {
         case ' ':
             event.preventDefault();
             isPaused = !isPaused;
-            statusEl.textContent = isPaused ? 'Paused' : 'Playing';
+            showStatus(isPaused ? 'Paused' : 'Playing');
             break;
 
         case 'm':
@@ -513,7 +561,7 @@ function handleKeyPress(event) {
             if (audioAnalyzer) {
                 audioAnalyzer.toggleMute();
                 const isMuted = audioAnalyzer.isMuted();
-                statusEl.textContent = isMuted ? 'Audio muted' : 'Audio unmuted';
+                showStatus(isMuted ? 'Audio muted' : 'Audio unmuted');
             }
             break;
 
@@ -548,16 +596,16 @@ function handleKeyPress(event) {
             // Check if we're on iPhone Camera scene with CORS available
             if (visualizer.getCurrentSceneName() === 'iPhone Camera' && iphoneSource && iphoneSource.hasCORS()) {
                 const modeName = iphoneSource.cycleMode();
-                statusEl.textContent = `iPhone: ${modeName}`;
+                showStatus(`iPhone: ${modeName}`);
                 updateTrailsControlsVisibility();
                 updateTrailsControlsUI();
             } else if (webcamAnalyzer) {
                 const modeName = webcamAnalyzer.cycleMode();
-                statusEl.textContent = `Webcam: ${modeName}`;
+                showStatus(`Webcam: ${modeName}`);
                 updateTrailsControlsVisibility();
                 updateTrailsControlsUI();
             } else {
-                statusEl.textContent = 'Webcam not available';
+                showStatus('Webcam not available');
             }
             break;
 
@@ -570,7 +618,7 @@ function handleKeyPress(event) {
                                        visualizer.getCurrentSceneName() === 'iPhone Camera';
                 if ((isWebcamTrails || isIPhoneTrails) && visualizer) {
                     const colorMode = visualizer.cycleSparkColorMode();
-                    statusEl.textContent = `Spark Color: ${colorMode}`;
+                    showStatus(`Spark Color: ${colorMode}`);
                     updateTrailsControlsUI();
                 }
             }
@@ -585,7 +633,7 @@ function handleKeyPress(event) {
                                        visualizer.getCurrentSceneName() === 'iPhone Camera';
                 if ((isWebcamTrails || isIPhoneTrails) && visualizer) {
                     const density = visualizer.adjustSparkDensity(0.25);
-                    statusEl.textContent = `Spark Density: ${(density * 100).toFixed(0)}%`;
+                    showStatus(`Spark Density: ${(density * 100).toFixed(0)}%`);
                     updateTrailsControlsUI();
                 }
             }
@@ -600,7 +648,7 @@ function handleKeyPress(event) {
                                        visualizer.getCurrentSceneName() === 'iPhone Camera';
                 if ((isWebcamTrails || isIPhoneTrails) && visualizer) {
                     const density = visualizer.adjustSparkDensity(-0.25);
-                    statusEl.textContent = `Spark Density: ${(density * 100).toFixed(0)}%`;
+                    showStatus(`Spark Density: ${(density * 100).toFixed(0)}%`);
                     updateTrailsControlsUI();
                 }
             }
