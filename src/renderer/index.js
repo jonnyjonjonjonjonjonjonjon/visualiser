@@ -354,56 +354,22 @@ function updateIPhoneFeedVisibility() {
 
 // Initialize fullscreen button
 function initFullscreenButton() {
-    fullscreenBtn.addEventListener('click', async () => {
-        if (window.electronAPI) {
-            const result = await window.electronAPI.toggleFullscreen();
-            if (result && result.success) {
-                fullscreenBtn.classList.toggle('is-fullscreen', result.isFullScreen);
-                // Trigger resize after fullscreen transition
-                setTimeout(resizeCanvas, 100);
-            }
+    fullscreenBtn.addEventListener('click', () => {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(err => {
+                console.error('Fullscreen error:', err);
+            });
         } else {
-            // Fallback for browser - use Fullscreen API on canvas element
-            if (!document.fullscreenElement) {
-                canvas.requestFullscreen().catch(err => {
-                    console.error('Fullscreen error:', err);
-                });
-                fullscreenBtn.classList.add('is-fullscreen');
-            } else {
-                document.exitFullscreen();
-                fullscreenBtn.classList.remove('is-fullscreen');
-            }
-            // Trigger resize multiple times to catch the fullscreen transition
-            setTimeout(resizeCanvas, 50);
-            setTimeout(resizeCanvas, 150);
-            setTimeout(resizeCanvas, 300);
+            document.exitFullscreen();
         }
     });
 
-    // Listen for fullscreen changes from Electron (keyboard shortcuts F/F11)
-    if (window.electronAPI && window.electronAPI.onFullscreenChanged) {
-        window.electronAPI.onFullscreenChanged((isFullScreen) => {
-            fullscreenBtn.classList.toggle('is-fullscreen', isFullScreen);
-            // Trigger resize multiple times to catch the fullscreen transition
-            setTimeout(resizeCanvas, 50);
-            setTimeout(resizeCanvas, 150);
-            setTimeout(resizeCanvas, 300);
-        });
-    }
-
-    // Listen for fullscreen changes from browser Fullscreen API
+    // Listen for fullscreen changes
     document.addEventListener('fullscreenchange', () => {
         fullscreenBtn.classList.toggle('is-fullscreen', !!document.fullscreenElement);
         // Trigger resize after fullscreen transition
         setTimeout(resizeCanvas, 100);
     });
-
-    // Listen for window resize events from Electron main process
-    if (window.electronAPI && window.electronAPI.onWindowResized) {
-        window.electronAPI.onWindowResized(() => {
-            resizeCanvas();
-        });
-    }
 }
 
 // Initialize iPhone modal event listeners
@@ -569,15 +535,12 @@ function handleKeyPress(event) {
         case 'F':
         case 'F11':
             event.preventDefault();
-            if (window.electronAPI) {
-                window.electronAPI.toggleFullscreen();
-            }
-            break;
-
-        case 't':
-        case 'T':
-            if (window.electronAPI) {
-                window.electronAPI.toggleAlwaysOnTop();
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.error('Fullscreen error:', err);
+                });
+            } else {
+                document.exitFullscreen();
             }
             break;
 
