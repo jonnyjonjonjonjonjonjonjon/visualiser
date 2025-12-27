@@ -133,6 +133,106 @@
             text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
         }
 
+        /* Trails controls - standalone fixed element */
+        #trails-controls {
+            position: fixed;
+            top: 100px;
+            left: 30px;
+            padding: 12px 15px;
+            background: rgba(0, 0, 0, 0.85);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 1001;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        body.show-cursor #trails-controls.visible {
+            opacity: 1;
+        }
+
+        #trails-controls .trails-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        #trails-controls .trails-row:last-child {
+            margin-bottom: 0;
+        }
+
+        #trails-controls .trails-label {
+            width: 60px;
+            font-size: 11px;
+            color: #999;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        #trails-controls button {
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            color: #ddd;
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.15s ease;
+        }
+
+        #trails-controls button:hover {
+            background: rgba(255, 255, 255, 0.25);
+            color: #fff;
+        }
+
+        #trails-controls button.active {
+            background: rgba(255, 150, 50, 0.7);
+            border-color: rgba(255, 150, 50, 0.9);
+            color: #fff;
+        }
+
+        #trails-controls input[type="range"] {
+            width: 100px;
+            height: 4px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: rgba(255, 255, 255, 0.25);
+            border-radius: 2px;
+            cursor: pointer;
+        }
+
+        #trails-controls input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            background: #ff9632;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+
+        #trails-controls input[type="range"]::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            background: #ff9632;
+            border-radius: 50%;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+
+        #trails-controls span:not(.trails-label) {
+            width: 45px;
+            text-align: right;
+            color: #ff9632;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
         #help {
             font-size: 13px;
             line-height: 1.6;
@@ -198,27 +298,6 @@
             font-size: 14px;
         }
 
-        #trails-controls {
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            background: rgba(0, 0, 0, 0.9);
-            padding: 15px 20px;
-            border-radius: 10px;
-            color: #fff;
-            font-size: 13px;
-            pointer-events: auto;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-            z-index: 1000;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        body.show-cursor #trails-controls.visible {
-            opacity: 1;
-        }
-
-        /* Temporarily disabled to debug slider issue */
 
         /* Paint controls - same styling as trails controls */
         #paint-controls {
@@ -431,6 +510,31 @@
         </svg>
     </button>
 
+    <!-- Trails controls - standalone fixed element -->
+    <div id="trails-controls">
+        <div class="trails-row">
+            <span class="trails-label">Color</span>
+            <button data-color="0" class="active">Fire</button>
+            <button data-color="1">Rainbow</button>
+            <button data-color="2">Viz</button>
+        </div>
+        <div class="trails-row">
+            <span class="trails-label">Density</span>
+            <input type="range" id="density-slider" min="25" max="200" value="100">
+            <span id="density-value">100%</span>
+        </div>
+        <div class="trails-row">
+            <span class="trails-label">Particles</span>
+            <input type="range" id="particles-slider" min="500" max="5000" value="2000" step="100">
+            <span id="particles-value">2000</span>
+        </div>
+        <div class="trails-row">
+            <span class="trails-label">Size</span>
+            <input type="range" id="size-slider" min="10" max="400" value="100" step="10">
+            <span id="size-value">100%</span>
+        </div>
+    </div>
+
     <div id="overlay">
         <div id="scene-name">Loading...</div>
         <div id="status">Initializing audio...</div>
@@ -477,18 +581,6 @@
         <p>This visualizer needs access to your microphone to analyze audio. Please grant permission and reload the application.</p>
     </div>
 
-    <!-- trails-controls hidden - sliders broken, using keyboard shortcuts instead -->
-    <div id="trails-controls" style="display:none;">
-        <button data-color="0"></button>
-        <button data-color="1"></button>
-        <button data-color="2"></button>
-        <input type="range" id="density-slider">
-        <span id="density-value"></span>
-        <input type="range" id="particles-slider">
-        <span id="particles-value"></span>
-        <input type="range" id="size-slider">
-        <span id="size-value"></span>
-    </div>
 
     <div id="paint-controls">
         <div class="control-group">

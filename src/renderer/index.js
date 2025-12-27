@@ -137,9 +137,9 @@ function updateTrailsControlsUI() {
     particlesSlider.value = particles;
     particlesValueEl.textContent = particles.toString();
 
-    // Update size slider (convert multiplier back to slider value)
+    // Update size slider (multiplier as percentage: 1.0x = 100%)
     const size = visualizer.sparkSystem ? visualizer.sparkSystem.getSizeMultiplier() : 1.0;
-    sizeSlider.value = Math.round((size - 1.0) * 100);  // 1.0x → 0, 2.0x → 100, 0.5x → -50
+    sizeSlider.value = Math.round(size * 100);  // 1.0x → 100, 2.0x → 200, 0.5x → 50
     sizeValueEl.textContent = `${Math.round(size * 100)}%`;
 }
 
@@ -171,12 +171,12 @@ function initTrailsControls() {
         particlesValueEl.textContent = particles.toString();
     });
 
-    // Size slider: 0 = normal (1.0x), positive = bigger, negative = smaller
+    // Size slider: value is percentage (100 = 1.0x, 200 = 2.0x, 50 = 0.5x)
     sizeSlider.addEventListener('input', () => {
         if (!visualizer || !visualizer.sparkSystem) return;
-        const size = 1.0 + parseInt(sizeSlider.value) / 100;  // 0 → 1.0x, 100 → 2.0x, -50 → 0.5x
+        const size = parseInt(sizeSlider.value) / 100;  // 100 → 1.0x, 200 → 2.0x, 50 → 0.5x
         visualizer.sparkSystem.setSizeMultiplier(size);
-        sizeValueEl.textContent = `${Math.round(size * 100)}%`;
+        sizeValueEl.textContent = `${sizeSlider.value}%`;
     });
 }
 
