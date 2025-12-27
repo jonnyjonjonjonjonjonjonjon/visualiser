@@ -268,15 +268,20 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            position: relative;
+            z-index: 10;
         }
 
         #trails-controls input[type="range"] {
             flex: 1;
-            height: 20px;
+            height: 24px;
             background: transparent;
             outline: none;
             -webkit-appearance: none;
+            appearance: none;
             cursor: pointer;
+            pointer-events: auto;
+            touch-action: none;
         }
 
         #trails-controls input[type="range"]::-webkit-slider-runnable-track {
@@ -364,15 +369,20 @@
             display: flex;
             align-items: center;
             gap: 10px;
+            position: relative;
+            z-index: 10;
         }
 
         #paint-controls input[type="range"] {
             flex: 1;
-            height: 20px;
+            height: 24px;
             background: transparent;
             outline: none;
             -webkit-appearance: none;
+            appearance: none;
             cursor: pointer;
+            pointer-events: auto;
+            touch-action: none;
         }
 
         #paint-controls input[type="range"]::-webkit-slider-runnable-track {
