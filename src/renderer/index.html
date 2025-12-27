@@ -46,6 +46,7 @@
             width: 100%;
             height: 100%;
             display: block;
+            pointer-events: none;
         }
 
         #overlay {
@@ -280,39 +281,47 @@
             -webkit-appearance: none;
             appearance: none;
             cursor: pointer;
-            pointer-events: auto;
-            touch-action: none;
+            margin: 0;
+            padding: 0;
         }
 
         #trails-controls input[type="range"]::-webkit-slider-runnable-track {
+            width: 100%;
             height: 4px;
             background: rgba(255, 255, 255, 0.2);
             border-radius: 2px;
+            cursor: pointer;
         }
 
         #trails-controls input[type="range"]::-webkit-slider-thumb {
             -webkit-appearance: none;
-            width: 16px;
-            height: 16px;
+            appearance: none;
+            width: 18px;
+            height: 18px;
             background: #ff9632;
             border-radius: 50%;
             cursor: pointer;
-            margin-top: -6px;
+            margin-top: -7px;
+            border: none;
+            box-shadow: 0 0 4px rgba(0,0,0,0.3);
         }
 
         #trails-controls input[type="range"]::-moz-range-track {
+            width: 100%;
             height: 4px;
             background: rgba(255, 255, 255, 0.2);
             border-radius: 2px;
+            cursor: pointer;
         }
 
         #trails-controls input[type="range"]::-moz-range-thumb {
-            width: 16px;
-            height: 16px;
+            width: 18px;
+            height: 18px;
             background: #ff9632;
             border-radius: 50%;
             border: none;
             cursor: pointer;
+            box-shadow: 0 0 4px rgba(0,0,0,0.3);
         }
 
         #trails-controls #density-value,
@@ -381,39 +390,47 @@
             -webkit-appearance: none;
             appearance: none;
             cursor: pointer;
-            pointer-events: auto;
-            touch-action: none;
+            margin: 0;
+            padding: 0;
         }
 
         #paint-controls input[type="range"]::-webkit-slider-runnable-track {
+            width: 100%;
             height: 4px;
             background: rgba(255, 255, 255, 0.2);
             border-radius: 2px;
+            cursor: pointer;
         }
 
         #paint-controls input[type="range"]::-webkit-slider-thumb {
             -webkit-appearance: none;
-            width: 16px;
-            height: 16px;
+            appearance: none;
+            width: 18px;
+            height: 18px;
             background: #32b4ff;
             border-radius: 50%;
             cursor: pointer;
-            margin-top: -6px;
+            margin-top: -7px;
+            border: none;
+            box-shadow: 0 0 4px rgba(0,0,0,0.3);
         }
 
         #paint-controls input[type="range"]::-moz-range-track {
+            width: 100%;
             height: 4px;
             background: rgba(255, 255, 255, 0.2);
             border-radius: 2px;
+            cursor: pointer;
         }
 
         #paint-controls input[type="range"]::-moz-range-thumb {
-            width: 16px;
-            height: 16px;
+            width: 18px;
+            height: 18px;
             background: #32b4ff;
             border-radius: 50%;
             border: none;
             cursor: pointer;
+            box-shadow: 0 0 4px rgba(0,0,0,0.3);
         }
 
         #paint-controls .slider-value {
