@@ -54,7 +54,14 @@ export default class Visualizer {
       uDeltaTime: { value: 0.016 },
       uPaintSensitivity: { value: 0.15 },
       uPaintColorSpeed: { value: 0.05 },
-      uPaintFadeDelay: { value: 10.0 }
+      uPaintFadeDelay: { value: 10.0 },
+      // Beat Echo uniforms
+      uPrevBeatTexture: { value: null },
+      uBeatEchoComposite: { value: null },
+      uBeatColorMode: { value: 0 },
+      uBeatHue: { value: 0 },
+      uBeatEchoThreshold: { value: 0.01 },
+      uOnBeat: { value: 0 }
     };
 
     // Beat decay value for smooth beat response
@@ -122,6 +129,20 @@ export default class Visualizer {
     this.uniforms.uWebcamTextureHD = { value: this.webcamHDTexture };
     this.uniforms.uWebcamHDResolution = { value: new THREE.Vector2(this.webcamHDWidth, this.webcamHDHeight) };
 
+    // Create previous beat texture for Beat Echo (same size as HD webcam)
+    this.prevBeatData = new Uint8Array(this.webcamHDWidth * this.webcamHDHeight * 4);
+    this.prevBeatTexture = new THREE.DataTexture(
+      this.prevBeatData,
+      this.webcamHDWidth,
+      this.webcamHDHeight,
+      THREE.RGBAFormat,
+      THREE.UnsignedByteType
+    );
+    this.prevBeatTexture.minFilter = THREE.LinearFilter;
+    this.prevBeatTexture.magFilter = THREE.LinearFilter;
+    this.prevBeatTexture.needsUpdate = true;
+    this.uniforms.uPrevBeatTexture = { value: this.prevBeatTexture };
+
     // Create iPhone camera texture (will be set from img element)
     this.iphoneTexture = null;
     this.uniforms.uIPhoneTexture = { value: null };
@@ -159,6 +180,12 @@ export default class Visualizer {
     this.currentTargetIndex = 0;
     this.lastFrameTime = performance.now();
 
+    // Beat Echo render targets and state
+    this.beatEchoTargets = null;
+    this.beatEchoHue = 0;
+    this.beatEchoColorMode = 0;  // 0=natural, 1=tint, 2=audio
+    this.beatEchoColorModeNames = ['Natural', 'Beat Tint', 'Audio-reactive'];
+
     // Bind resize handler (called from index.js)
     this.handleResize = this.handleResize.bind(this);
   }
@@ -190,6 +217,11 @@ export default class Visualizer {
     // Clear ping-pong targets when switching to Motion Paint (fresh start)
     if (shaderDef.name === 'Motion Paint' && this.pingPongTargets) {
       this.clearPingPongTargets();
+    }
+
+    // Clear Beat Echo targets when switching to Beat Echo (fresh start)
+    if (shaderDef.name === 'Beat Echo' && this.beatEchoTargets) {
+      this.clearBeatEchoComposite();
     }
 
     // Create shader material
@@ -294,9 +326,18 @@ export default class Visualizer {
     // Handle beat detection with smooth decay
     if (audioData.beat) {
       this.uniforms.uBeat.value = 1.0;
+
+      // Beat Echo: trigger on beat and cycle hue (copy happens AFTER render)
+      if (this.getCurrentSceneName() === 'Beat Echo') {
+        this.uniforms.uOnBeat.value = 1.0;
+        this.beatEchoHue = (this.beatEchoHue + 0.1) % 1.0;
+        this.uniforms.uBeatHue.value = this.beatEchoHue;
+      }
     } else {
       // Decay beat value smoothly
       this.uniforms.uBeat.value *= this.beatDecay;
+      // Reset on-beat flag
+      this.uniforms.uOnBeat.value = 0.0;
     }
 
     // Update spectrum texture with new frequency data
@@ -442,6 +483,88 @@ export default class Visualizer {
   }
 
   /**
+   * Initialize Beat Echo render targets (composite only, prevBeat uses DataTexture)
+   */
+  initBeatEchoTargets() {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    // Use high quality render targets
+    const targetOptions = {
+      format: THREE.RGBAFormat,
+      type: THREE.UnsignedByteType,
+      minFilter: THREE.LinearFilter,
+      magFilter: THREE.LinearFilter,
+      generateMipmaps: false,
+      stencilBuffer: false,
+      depthBuffer: false
+    };
+
+    this.beatEchoTargets = {
+      composite: [
+        new THREE.WebGLRenderTarget(width, height, targetOptions),
+        new THREE.WebGLRenderTarget(width, height, targetOptions)
+      ],
+      compositeIndex: 0
+    };
+  }
+
+  /**
+   * Clear Beat Echo composite to black (reset)
+   */
+  clearBeatEchoComposite() {
+    if (this.beatEchoTargets) {
+      const prevClearColor = this.renderer.getClearColor(new THREE.Color());
+      const prevClearAlpha = this.renderer.getClearAlpha();
+
+      this.renderer.setClearColor(0x000000, 1);
+
+      this.renderer.setRenderTarget(this.beatEchoTargets.composite[0]);
+      this.renderer.clear();
+      this.renderer.setRenderTarget(this.beatEchoTargets.composite[1]);
+      this.renderer.clear();
+      this.renderer.setRenderTarget(null);
+
+      this.renderer.setClearColor(prevClearColor, prevClearAlpha);
+    }
+
+    // Also clear the prevBeat DataTexture
+    if (this.prevBeatData) {
+      this.prevBeatData.fill(0);
+      this.prevBeatTexture.needsUpdate = true;
+    }
+  }
+
+  /**
+   * Cycle Beat Echo color mode
+   * @returns {string} New color mode name
+   */
+  cycleBeatEchoColorMode() {
+    this.beatEchoColorMode = (this.beatEchoColorMode + 1) % 3;
+    this.uniforms.uBeatColorMode.value = this.beatEchoColorMode;
+    return this.beatEchoColorModeNames[this.beatEchoColorMode];
+  }
+
+  /**
+   * Get current Beat Echo color mode name
+   * @returns {string} Color mode name
+   */
+  getBeatEchoColorModeName() {
+    return this.beatEchoColorModeNames[this.beatEchoColorMode];
+  }
+
+  /**
+   * Dispose Beat Echo targets
+   */
+  disposeBeatEchoTargets() {
+    if (this.beatEchoTargets) {
+      this.beatEchoTargets.composite[0].dispose();
+      this.beatEchoTargets.composite[1].dispose();
+      this.beatEchoTargets = null;
+    }
+  }
+
+  /**
    * Update iPhone camera texture from image element
    * Uses canvas as intermediary for MJPEG streams
    * @param {HTMLImageElement} imgElement - Image element streaming MJPEG
@@ -578,7 +701,9 @@ export default class Visualizer {
    * Render the current scene
    */
   render() {
-    const isMotionPaint = this.shaders[this.currentSceneIndex].name === 'Motion Paint';
+    const currentSceneName = this.shaders[this.currentSceneIndex].name;
+    const isMotionPaint = currentSceneName === 'Motion Paint';
+    const isBeatEcho = currentSceneName === 'Beat Echo';
 
     // Update delta time
     const now = performance.now();
@@ -608,6 +733,70 @@ export default class Visualizer {
 
       // Swap targets for next frame
       this.currentTargetIndex = 1 - this.currentTargetIndex;
+    } else if (isBeatEcho) {
+      // Initialize Beat Echo on first use
+      if (!this.beatEchoTargets) {
+        this.initBeatEchoTargets();
+        this.clearBeatEchoComposite();
+        // Create a separate scene for fast display with proper UV shader
+        this.beatEchoDisplayScene = new THREE.Scene();
+        this.beatEchoDisplayMaterial = new THREE.ShaderMaterial({
+          uniforms: {
+            uTexture: { value: null },
+            uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) }
+          },
+          vertexShader: `void main() { gl_Position = vec4(position, 1.0); }`,
+          fragmentShader: `
+            precision highp float;
+            uniform sampler2D uTexture;
+            uniform vec2 uResolution;
+            void main() {
+              vec2 uv = gl_FragCoord.xy / uResolution;
+              gl_FragColor = texture2D(uTexture, uv);
+            }
+          `
+        });
+        this.beatEchoDisplayQuad = new THREE.Mesh(
+          new THREE.PlaneGeometry(2, 2),
+          this.beatEchoDisplayMaterial
+        );
+        this.beatEchoDisplayScene.add(this.beatEchoDisplayQuad);
+      }
+
+      const isOnBeat = this.uniforms.uOnBeat.value > 0.5;
+      const compositeIndex = this.beatEchoTargets.compositeIndex;
+
+      if (isOnBeat) {
+        // On beat: render shader to accumulate new layer
+        const currentComposite = this.beatEchoTargets.composite[compositeIndex];
+        const nextComposite = this.beatEchoTargets.composite[1 - compositeIndex];
+
+        this.uniforms.uBeatEchoComposite.value = currentComposite.texture;
+
+        // Render to composite buffer
+        this.renderer.setRenderTarget(nextComposite);
+        this.renderer.render(this.scene, this.camera);
+        this.renderer.setRenderTarget(null);
+
+        // Display result
+        this.beatEchoDisplayMaterial.uniforms.uTexture.value = nextComposite.texture;
+        this.renderer.render(this.beatEchoDisplayScene, this.camera);
+
+        // CRITICAL: Copy current webcam to prevBeat AFTER render completes
+        // This ensures next beat compares new frame vs this frame (not identical frames)
+        if (this.webcamHDData && this.prevBeatData) {
+          this.prevBeatData.set(this.webcamHDData);
+          this.prevBeatTexture.needsUpdate = true;
+        }
+
+        // Swap buffers for next beat
+        this.beatEchoTargets.compositeIndex = 1 - compositeIndex;
+      } else {
+        // Not on beat: just display current composite (fast)
+        const currentComposite = this.beatEchoTargets.composite[compositeIndex];
+        this.beatEchoDisplayMaterial.uniforms.uTexture.value = currentComposite.texture;
+        this.renderer.render(this.beatEchoDisplayScene, this.camera);
+      }
     } else {
       this.renderer.render(this.scene, this.camera);
     }
@@ -637,6 +826,13 @@ export default class Visualizer {
       this.disposePingPongTargets();
       this.initPingPongTargets();
       this.clearPingPongTargets();
+    }
+
+    // Recreate Beat Echo targets at new size if they exist
+    if (needResize && this.beatEchoTargets) {
+      this.disposeBeatEchoTargets();
+      this.initBeatEchoTargets();
+      this.clearBeatEchoComposite();
     }
   }
 
@@ -732,6 +928,14 @@ export default class Visualizer {
 
     // Dispose ping-pong targets
     this.disposePingPongTargets();
+
+    // Dispose Beat Echo targets
+    this.disposeBeatEchoTargets();
+
+    // Dispose prevBeat texture
+    if (this.prevBeatTexture) {
+      this.prevBeatTexture.dispose();
+    }
 
     // Dispose renderer
     if (this.renderer) {

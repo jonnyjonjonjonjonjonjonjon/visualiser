@@ -535,6 +535,28 @@
         </div>
     </div>
 
+    <!-- Beat Echo debug overlay -->
+    <div id="beat-echo-debug" style="display: none; position: fixed; top: 10px; right: 80px; background: rgba(0,0,0,0.9); color: #0f0; font-family: monospace; font-size: 11px; padding: 10px; border-radius: 5px; z-index: 2000; line-height: 1.5; min-width: 200px;">
+        <div style="border-bottom: 1px solid #333; margin-bottom: 5px; padding-bottom: 5px;">
+            <strong>Beat Echo Debug</strong>
+        </div>
+        <div>Beats: <span id="debug-beat-count">0</span></div>
+        <div>Last beat: <span id="debug-last-beat">-</span></div>
+        <div>Webcam HD: <span id="debug-webcam-hd">?</span></div>
+        <div>PrevBeat: <span id="debug-prevbeat">?</span></div>
+        <div>Composite: <span id="debug-composite">?</span></div>
+        <div>Threshold: <span id="debug-threshold">?</span></div>
+        <div>Color mode: <span id="debug-colormode">?</span></div>
+        <div>Webcam mode: <span id="debug-webcam-mode">?</span></div>
+        <div style="border-top: 1px solid #333; margin-top: 5px; padding-top: 5px;">
+            Log entries: <span id="debug-log-count">0</span>
+        </div>
+        <button id="debug-copy-log" style="margin-top: 8px; padding: 5px 10px; background: #0a0; color: #000; border: none; border-radius: 3px; cursor: pointer; font-family: monospace; font-size: 11px; width: 100%;">
+            📋 Copy Log to Clipboard
+        </button>
+        <div id="debug-copy-status" style="color: #ff0; margin-top: 5px; display: none;"></div>
+    </div>
+
     <div id="overlay">
         <div id="scene-name">Loading...</div>
         <div id="status">Initializing audio...</div>
@@ -569,6 +591,12 @@
             </div>
             <div class="key-group">
                 <span class="key">D</span> Disconnect iPhone Camera
+            </div>
+            <div class="key-group">
+                <span class="key">R</span> Reset Beat Echo
+            </div>
+            <div class="key-group">
+                <span class="key">B</span> Beat Echo Color Mode
             </div>
             <div class="key-group">
                 <span class="key">H</span> Toggle Help
