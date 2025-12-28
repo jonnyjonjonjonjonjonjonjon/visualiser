@@ -950,7 +950,8 @@ void main() {
         vec3 diff = abs(current - prevBeat);
         float motion = max(diff.r, max(diff.g, diff.b));
 
-        // Where there's motion, show the FULL current frame (not just edges)
+        // Where there's motion, decide what to show based on "interestingness"
+        // People tend to be more extreme (far from mid-gray) than plain backgrounds
         if (motion > uBeatEchoThreshold) {
             vec3 color;
             if (uBeatColorMode < 0.5) {
@@ -965,8 +966,25 @@ void main() {
                 vec3 tint = vec3(0.5 + uBass, 0.5 + uMid, 0.5 + uTreble);
                 color = current * tint;
             }
-            // Layer this frame on top (max blend keeps brightest)
-            composite = max(composite, color);
+
+            // Calculate "interestingness" based on luminance
+            float lumColor = dot(color, vec3(0.299, 0.587, 0.114));
+            float lumComposite = dot(composite, vec3(0.299, 0.587, 0.114));
+
+            // If composite is essentially black (uninitialized), always use current
+            if (lumComposite < 0.02) {
+                composite = color;
+            } else {
+                // Compare extremity - how far from mid-gray
+                float interestColor = abs(lumColor - 0.5);
+                float interestComposite = abs(lumComposite - 0.5);
+
+                // Always show some of the new content (40% minimum)
+                // Where new is more interesting: 100% new
+                // Where old is more interesting: 40% new, 60% old
+                float blend = 0.4 + 0.6 * step(interestComposite, interestColor);
+                composite = mix(composite, color, blend);
+            }
         }
     }
 
@@ -1031,6 +1049,38 @@ void main() {
 }
 `;
 
+// Bubble Rain shader - dimmed webcam background for bubble particle overlay
+const bubbleRainShader = `
+precision highp float;
+
+uniform vec2 uResolution;
+uniform sampler2D uWebcamTextureHD;
+uniform vec2 uWebcamHDResolution;
+
+void main() {
+    vec2 uv = gl_FragCoord.xy / uResolution;
+
+    // Aspect ratio correction for webcam
+    float screenAspect = uResolution.x / uResolution.y;
+    float webcamAspect = uWebcamHDResolution.x / uWebcamHDResolution.y;
+    vec2 webcamUV = uv;
+
+    if (screenAspect > webcamAspect) {
+        float scale = screenAspect / webcamAspect;
+        webcamUV.y = (uv.y - 0.5) / scale + 0.5;
+    } else {
+        float scale = webcamAspect / screenAspect;
+        webcamUV.x = (uv.x - 0.5) / scale + 0.5;
+    }
+    webcamUV.y = 1.0 - webcamUV.y;  // Flip Y
+
+    // Dimmed webcam background (40% brightness)
+    vec3 bg = texture2D(uWebcamTextureHD, webcamUV).rgb * 0.4;
+
+    gl_FragColor = vec4(bg, 1.0);
+}
+`;
+
 // Export all shaders
 export default {
     shaders: [
@@ -1088,6 +1138,11 @@ export default {
             name: "Beat Echo",
             vertexShader: commonVertexShader,
             fragmentShader: beatEchoShader
+        },
+        {
+            name: "Bubble Rain",
+            vertexShader: commonVertexShader,
+            fragmentShader: bubbleRainShader
         }
     ]
 };

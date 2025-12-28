@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import shaders from './shaders/index.js';
 import SparkParticleSystem from './sparkParticleSystem.js';
+import BubbleParticleSystem from './bubbleParticleSystem.js';
 
 /**
  * Visualizer - Main Three.js visualization engine for music visualizer
@@ -171,6 +172,12 @@ export default class Visualizer {
 
     // Add spark particles mesh to scene (rendered on top of visualization)
     this.scene.add(this.sparkSystem.getMesh());
+
+    // Create bubble particle system for Bubble Rain mode
+    this.bubbleSystem = new BubbleParticleSystem(500);
+
+    // Add bubble particles mesh to scene (rendered on top of visualization)
+    this.scene.add(this.bubbleSystem.getMesh());
 
     // Current mesh (fullscreen quad)
     this.mesh = null;
@@ -414,6 +421,20 @@ export default class Visualizer {
         // Not in trails mode - hide spark mesh
         this.sparkSystem.getMesh().visible = false;
       }
+
+      // Bubble Rain mode - update bubble particle system
+      if (this.getCurrentSceneName() === 'Bubble Rain') {
+        const dt = 0.016;  // ~60fps
+        this.bubbleSystem.update(
+          dt,
+          motionData.buffer,
+          motionData.width,
+          motionData.height
+        );
+        this.bubbleSystem.getMesh().visible = true;
+      } else {
+        this.bubbleSystem.getMesh().visible = false;
+      }
     } else {
       // Motion off - decay values smoothly
       this.uniforms.uMotionIntensity.value *= 0.9;
@@ -424,6 +445,14 @@ export default class Visualizer {
         this.sparkSystem.update(0.016);
       } else {
         this.sparkSystem.getMesh().visible = false;
+      }
+
+      // Update bubbles even without motion (they still fall with gravity)
+      if (this.getCurrentSceneName() === 'Bubble Rain') {
+        this.bubbleSystem.update(0.016, null, 0, 0);
+        this.bubbleSystem.getMesh().visible = true;
+      } else {
+        this.bubbleSystem.getMesh().visible = false;
       }
     }
   }
@@ -924,6 +953,11 @@ export default class Visualizer {
     // Dispose spark system
     if (this.sparkSystem) {
       this.sparkSystem.dispose();
+    }
+
+    // Dispose bubble system
+    if (this.bubbleSystem) {
+      this.bubbleSystem.dispose();
     }
 
     // Dispose ping-pong targets
