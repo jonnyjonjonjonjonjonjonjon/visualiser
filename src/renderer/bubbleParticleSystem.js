@@ -1,14 +1,14 @@
 import * as THREE from 'three';
 
 /**
- * BubbleParticleSystem - Falling bubbles that bounce off motion
+ * SparkRainSystem - Falling sparks that bounce off motion
  *
- * Bubbles rain down from the top of the screen and bounce off areas
- * where webcam motion is detected, creating an interactive effect.
+ * Sparkler-like sparks rain down from the top of the screen and bounce off
+ * areas where webcam motion is detected, creating an interactive effect.
  */
 
-// Vertex shader for bubble points
-const bubbleVertexShader = `
+// Vertex shader for spark points
+const sparkVertexShader = `
 attribute float size;
 attribute float alpha;
 varying float vAlpha;
@@ -21,45 +21,46 @@ void main() {
 }
 `;
 
-// Fragment shader for bubble points - circular with specular highlight
-const bubbleFragmentShader = `
+// Fragment shader for sparkler sparks - intense bright core with orange glow
+const sparkFragmentShader = `
 varying float vAlpha;
 
 void main() {
   vec2 center = gl_PointCoord - 0.5;
   float dist = length(center);
 
-  // Discard pixels outside the circle
-  if (dist > 0.5) discard;
+  // Sharp bright core - more intense
+  float core = 1.0 - smoothstep(0.0, 0.12, dist);
+  core = core * core;  // Sharper falloff
 
-  // Bubble edge (soft falloff)
-  float edge = smoothstep(0.5, 0.35, dist);
+  // Outer glow (softer, wider)
+  float glow = 1.0 - smoothstep(0.0, 0.5, dist);
+  glow = glow * glow * 0.6;
 
-  // Inner highlight (specular reflection)
-  vec2 highlightPos = vec2(-0.15, 0.15);
-  float highlight = smoothstep(0.25, 0.05, length(center - highlightPos));
+  // Sparkler colors: intense white core -> yellow -> orange glow
+  vec3 coreColor = vec3(1.0, 1.0, 1.0);   // Pure bright white
+  vec3 glowColor = vec3(1.0, 0.6, 0.15);  // Warm orange glow
 
-  // Bubble color - light blue/cyan
-  vec3 bubbleColor = vec3(0.4, 0.7, 1.0);
-  vec3 color = bubbleColor + highlight * 0.6;
+  vec3 color = mix(glowColor, coreColor, core);
 
-  // Edge ring for more bubble-like appearance
-  float ring = smoothstep(0.5, 0.4, dist) - smoothstep(0.4, 0.3, dist);
-  color += ring * 0.3;
+  // Boost overall brightness
+  float intensity = (core * 2.0 + glow) * vAlpha;
 
-  gl_FragColor = vec4(color, edge * vAlpha * 0.8);
+  if (intensity < 0.01) discard;
+
+  gl_FragColor = vec4(color * intensity * 1.5, intensity);
 }
 `;
 
 export default class BubbleParticleSystem {
-  constructor(maxParticles = 500) {
+  constructor(maxParticles = 1500) {
     this.maxParticles = maxParticles;
     this.activeCount = 0;
 
     // Physics settings
-    this.gravity = 0.4;           // Downward acceleration
-    this.bounceDamping = 0.55;    // Energy retained after bounce (0-1)
-    this.spawnRate = 15;          // Bubbles per second
+    this.gravity = 4.0;           // Very heavy, streaming down fast
+    this.bounceDamping = 0.3;     // Quick bounce, not floaty
+    this.spawnRate = 80;          // Rain of sparks!
     this.motionThreshold = 35;    // Motion value threshold for collision (0-255)
 
     // Initialize particle pool
@@ -87,12 +88,12 @@ export default class BubbleParticleSystem {
     this.geometry.setAttribute('alpha', new THREE.BufferAttribute(this.alphas, 1));
     this.geometry.setAttribute('size', new THREE.BufferAttribute(this.sizes, 1));
 
-    // Custom shader material
+    // Custom shader material with additive blending for glow effect
     this.material = new THREE.ShaderMaterial({
-      vertexShader: bubbleVertexShader,
-      fragmentShader: bubbleFragmentShader,
+      vertexShader: sparkVertexShader,
+      fragmentShader: sparkFragmentShader,
       transparent: true,
-      blending: THREE.NormalBlending,
+      blending: THREE.AdditiveBlending,
       depthTest: false,
       depthWrite: false
     });
@@ -137,12 +138,12 @@ export default class BubbleParticleSystem {
     particle.x = Math.random();
     particle.y = 1.05;  // Just above visible area
 
-    // Slight random horizontal drift
-    particle.vx = (Math.random() - 0.5) * 0.1;
-    particle.vy = 0;  // Start with no vertical velocity
+    // Minimal horizontal drift - fall straight down
+    particle.vx = (Math.random() - 0.5) * 0.02;
+    particle.vy = -0.5 - Math.random() * 0.5;  // Start with downward velocity
 
     // Random size variation
-    particle.size = 0.6 + Math.random() * 0.6;
+    particle.size = 0.4 + Math.random() * 0.4;
     particle.alpha = 0.9 + Math.random() * 0.1;
     particle.bounces = 0;
     particle.active = true;
@@ -197,31 +198,31 @@ export default class BubbleParticleSystem {
             // Reverse vertical velocity with damping
             p.vy = -p.vy * this.bounceDamping;
 
-            // Add some randomness to horizontal velocity
-            p.vx += (Math.random() - 0.5) * 0.3;
+            // Minimal horizontal scatter - sparks mostly fall straight
+            p.vx += (Math.random() - 0.5) * 0.1;
 
-            // Push bubble back above the collision point
-            p.y = prevY + 0.02;
+            // Push spark back above the collision point
+            p.y = prevY + 0.01;
 
-            // Fade slightly with each bounce
-            p.alpha *= 0.9;
+            // Fade with each bounce
+            p.alpha *= 0.85;
             p.bounces++;
 
-            // Cap horizontal velocity
-            p.vx = Math.max(-0.5, Math.min(0.5, p.vx));
+            // Kill horizontal velocity quickly
+            p.vx *= 0.5;
           }
         }
       }
 
-      // Apply slight air resistance
-      p.vx *= 0.995;
+      // Strong damping on horizontal movement - sparks fall straight
+      p.vx *= 0.9;
 
       // Deactivate conditions:
       // - Fallen below screen
       // - Drifted off sides
-      // - Too many bounces
+      // - Too many bounces (fewer for faster turnover)
       // - Faded out
-      if (p.y < -0.1 || p.x < -0.1 || p.x > 1.1 || p.bounces > 8 || p.alpha < 0.1) {
+      if (p.y < -0.1 || p.x < -0.1 || p.x > 1.1 || p.bounces > 3 || p.alpha < 0.1) {
         p.active = false;
         continue;
       }
@@ -252,7 +253,7 @@ export default class BubbleParticleSystem {
         this.alphas[idx] = p.alpha;
 
         // Size in pixels
-        this.sizes[idx] = p.size * 25;
+        this.sizes[idx] = p.size * 15;  // Smaller for sharper sparks
 
         idx++;
       }

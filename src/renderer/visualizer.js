@@ -92,6 +92,8 @@ export default class Visualizer {
     );
     this.motionTexture.minFilter = THREE.LinearFilter;
     this.motionTexture.magFilter = THREE.LinearFilter;
+    this.motionTexture.wrapS = THREE.ClampToEdgeWrapping;
+    this.motionTexture.wrapT = THREE.ClampToEdgeWrapping;
     this.motionTexture.needsUpdate = true;
     this.uniforms.uMotionTexture.value = this.motionTexture;
 
@@ -425,8 +427,10 @@ export default class Visualizer {
    * Initialize ping-pong render targets for Motion Paint
    */
   initPingPongTargets() {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
+    // Use physical pixel size to match the main canvas buffer
+    const pixelRatio = this.renderer.getPixelRatio();
+    const width = Math.floor(window.innerWidth * pixelRatio);
+    const height = Math.floor(window.innerHeight * pixelRatio);
 
     this.pingPongTargets = [
       new THREE.WebGLRenderTarget(width, height, {
