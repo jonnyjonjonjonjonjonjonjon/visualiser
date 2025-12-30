@@ -12,15 +12,16 @@ export default class Visualizer {
     this.canvas = canvas;
     this.container = canvas.parentElement || document.body;
 
-    // Initialize Three.js renderer with antialiasing, using existing canvas
+    // Initialize Three.js renderer (antialiasing disabled for performance on 4K)
     this.renderer = new THREE.WebGLRenderer({
       canvas: canvas,
-      antialias: true,
+      antialias: false,
       alpha: false
     });
-    // Use pixel ratio of 1 for consistent behavior
-    this.renderer.setPixelRatio(1);
-    this.renderer.setSize(canvas.width, canvas.height);
+    // Use device pixel ratio for sharp rendering on high-DPI displays (capped at 2 for performance)
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // Set initial size based on CSS display size, not canvas buffer size
+    this.renderer.setSize(canvas.clientWidth || window.innerWidth, canvas.clientHeight || window.innerHeight, false);
 
     // Create scene
     this.scene = new THREE.Scene();
@@ -34,9 +35,11 @@ export default class Visualizer {
     this.shaders = shaders.shaders;
 
     // Initialize uniforms object
+    // Note: uResolution will be set correctly by handleResize() after init
+    const pixelRatio = this.renderer.getPixelRatio();
     this.uniforms = {
       uTime: { value: 0.0 },
-      uResolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+      uResolution: { value: new THREE.Vector2(window.innerWidth * pixelRatio, window.innerHeight * pixelRatio) },
       uBass: { value: 0.0 },
       uMid: { value: 0.0 },
       uTreble: { value: 0.0 },
@@ -205,7 +208,7 @@ export default class Visualizer {
       uniforms: this.uniforms,
       vertexShader: shaderDef.vertexShader,
       fragmentShader: shaderDef.fragmentShader,
-      side: THREE.DoubleSide
+      side: THREE.FrontSide
     });
 
     // Create fullscreen quad (2x2 plane with orthographic camera)
@@ -649,20 +652,25 @@ export default class Visualizer {
    * Handle window resize events
    */
   handleResize() {
-    // Get the actual displayed size of the canvas
+    // Get the actual displayed size of the canvas (CSS pixels)
     const displayWidth = this.canvas.clientWidth;
     const displayHeight = this.canvas.clientHeight;
 
-    // Check if the canvas buffer size needs to change
-    const needResize = this.canvas.width !== displayWidth || this.canvas.height !== displayHeight;
+    // Account for pixel ratio when checking if resize is needed
+    // canvas.width/height is the drawing buffer size (physical pixels)
+    const pixelRatio = this.renderer.getPixelRatio();
+    const bufferWidth = Math.floor(displayWidth * pixelRatio);
+    const bufferHeight = Math.floor(displayHeight * pixelRatio);
+    const needResize = this.canvas.width !== bufferWidth || this.canvas.height !== bufferHeight;
 
     if (needResize) {
       // Update renderer size (this also sets canvas.width and canvas.height)
       this.renderer.setSize(displayWidth, displayHeight, false);
     }
 
-    // Update resolution uniform to match
-    this.uniforms.uResolution.value.set(displayWidth, displayHeight);
+    // Update resolution uniform to match actual drawing buffer size (physical pixels)
+    // gl_FragCoord in shaders uses physical pixels, so uResolution must match
+    this.uniforms.uResolution.value.set(bufferWidth, bufferHeight);
 
     // Recreate ping-pong targets at new size if they exist
     if (needResize && this.pingPongTargets) {

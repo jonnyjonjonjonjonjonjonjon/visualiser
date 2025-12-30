@@ -17,9 +17,11 @@ export default class AudioAnalyzer {
     this.timeDomainData = null;
     this.bufferLength = 1024; // FFT size
 
-    // Beat detection state
-    this.energyHistory = [];
+    // Beat detection state (using circular buffer for O(1) operations)
     this.energyHistoryLength = 43; // ~1 second at 60fps
+    this.energyHistory = new Array(this.energyHistoryLength).fill(0);
+    this.energyHistoryIndex = 0;
+    this.energyHistoryFilled = 0; // Track how many slots filled (for initial ramp-up)
     this.beatThreshold = 1.3;
     this.lastBeatTime = 0;
     this.beatCooldown = 100; // ms
@@ -40,6 +42,10 @@ export default class AudioAnalyzer {
 
     // Frequency mapping cache
     this.frequencyBinMap = null;
+
+    // Frame-based FFT caching (avoid multiple FFT calls per frame)
+    this.lastFFTFrame = -1;
+    this.frameCounter = 0;
 
     // State
     this.isInitialized = false;
@@ -184,7 +190,7 @@ export default class AudioAnalyzer {
   }
 
   /**
-   * Get raw frequency data
+   * Get raw frequency data (cached per frame to avoid multiple FFT calls)
    * @returns {Uint8Array} Frequency bin data (0-255 values)
    */
   getFrequencyData() {
@@ -192,7 +198,11 @@ export default class AudioAnalyzer {
       return new Uint8Array(this.bufferLength);
     }
 
-    this.analyser.getByteFrequencyData(this.frequencyData);
+    // Only compute FFT once per frame
+    if (this.lastFFTFrame !== this.frameCounter) {
+      this.analyser.getByteFrequencyData(this.frequencyData);
+      this.lastFFTFrame = this.frameCounter;
+    }
     return this.frequencyData;
   }
 
@@ -305,7 +315,7 @@ export default class AudioAnalyzer {
 
   /**
    * Detect if a beat occurred this frame
-   * Uses energy-based beat detection algorithm
+   * Uses energy-based beat detection algorithm with circular buffer
    * @returns {boolean} True if beat detected
    */
   getBeatDetected() {
@@ -318,17 +328,19 @@ export default class AudioAnalyzer {
         Math.floor((this.frequencyBinMap.mid.end - this.frequencyBinMap.mid.start) * 0.3)
     );
 
-    // Add to history
-    this.energyHistory.push(currentEnergy);
-
-    // Maintain history length
-    if (this.energyHistory.length > this.energyHistoryLength) {
-      this.energyHistory.shift();
+    // Add to circular buffer (O(1) instead of O(n) with shift())
+    this.energyHistory[this.energyHistoryIndex] = currentEnergy;
+    this.energyHistoryIndex = (this.energyHistoryIndex + 1) % this.energyHistoryLength;
+    if (this.energyHistoryFilled < this.energyHistoryLength) {
+      this.energyHistoryFilled++;
     }
 
     // Calculate average energy
-    const averageEnergy = this.energyHistory.reduce((a, b) => a + b, 0) /
-                         this.energyHistory.length;
+    let sum = 0;
+    for (let i = 0; i < this.energyHistoryFilled; i++) {
+      sum += this.energyHistory[i];
+    }
+    const averageEnergy = sum / this.energyHistoryFilled;
 
     // Check for beat
     const now = Date.now();
@@ -458,6 +470,10 @@ export default class AudioAnalyzer {
    * @returns {Object} Object containing bass, mid, treble, energy, beat, spectrum
    */
   getAudioData() {
+    // Increment frame counter to enable FFT caching
+    // (FFT computed once per getAudioData call, not per individual method)
+    this.frameCounter++;
+
     return {
       bass: this.getBass(),
       mid: this.getMid(),

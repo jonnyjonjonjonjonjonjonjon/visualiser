@@ -34,6 +34,8 @@ const iphoneCancelBtn = document.getElementById('iphone-cancel-btn');
 const iphoneErrorEl = document.getElementById('iphone-error');
 const iphoneStatusEl = document.getElementById('iphone-status');
 const iphoneFeedEl = document.getElementById('iphone-feed');
+// FPS counter
+const fpsCounterEl = document.getElementById('fps-counter');
 
 // App state
 let audioAnalyzer = null;
@@ -44,6 +46,12 @@ let isPaused = false;
 let isHelpVisible = false;
 let mouseTimeout = null;
 let statusTimeout = null;
+
+// FPS tracking
+let fpsVisible = false;
+let frameCount = 0;
+let lastFpsUpdate = performance.now();
+let currentFps = 60;
 
 // Handle resize events
 function resizeCanvas() {
@@ -494,7 +502,35 @@ function render() {
         visualizer.render();
     }
 
+    // Update FPS counter
+    frameCount++;
+    const now = performance.now();
+    if (now - lastFpsUpdate >= 500) { // Update every 500ms
+        currentFps = Math.round(frameCount / ((now - lastFpsUpdate) / 1000));
+        frameCount = 0;
+        lastFpsUpdate = now;
+
+        if (fpsVisible && fpsCounterEl) {
+            fpsCounterEl.textContent = `${currentFps} FPS`;
+            // Color code based on performance
+            fpsCounterEl.classList.remove('warning', 'critical');
+            if (currentFps < 30) {
+                fpsCounterEl.classList.add('critical');
+            } else if (currentFps < 50) {
+                fpsCounterEl.classList.add('warning');
+            }
+        }
+    }
+
     requestAnimationFrame(render);
+}
+
+// Toggle FPS counter visibility
+function toggleFpsCounter() {
+    fpsVisible = !fpsVisible;
+    if (fpsCounterEl) {
+        fpsCounterEl.classList.toggle('visible', fpsVisible);
+    }
 }
 
 // Keyboard controls
@@ -631,6 +667,12 @@ function handleKeyPress(event) {
             if (iphoneSource) {
                 disconnectIPhone();
             }
+            break;
+
+        case 'p':
+        case 'P':
+            // Toggle FPS counter
+            toggleFpsCounter();
             break;
 
         default:
