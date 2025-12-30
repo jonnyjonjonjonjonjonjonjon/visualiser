@@ -152,7 +152,7 @@ export default class Visualizer {
     this.uniforms.uIPhoneCORSEnabled = { value: 0.0 };
 
     // Create spark particle system for Trails mode
-    this.sparkSystem = new SparkParticleSystem(2000);
+    this.sparkSystem = new SparkParticleSystem(5000);
 
     // Add spark particles mesh to scene (rendered on top of visualization)
     this.scene.add(this.sparkSystem.getMesh());

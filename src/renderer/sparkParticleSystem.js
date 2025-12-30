@@ -48,7 +48,7 @@ export default class SparkParticleSystem {
     this.activeCount = 0;
 
     // Settings
-    this.density = 1.0;      // 0.25 to 5.0, controls spawn rate
+    this.density = 5.0;      // 0.25 to 5.0, controls spawn rate
     this.colorMode = 0;      // 0=fire, 1=rainbow, 2=visualization
     this.colorModeNames = ['Fire', 'Rainbow', 'Visualization'];
     this.sizeMultiplier = 1.0;  // -3.0 to 3.0, scales particle size
