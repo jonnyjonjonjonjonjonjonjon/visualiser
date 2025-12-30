@@ -492,167 +492,9 @@ function render() {
         }
 
         visualizer.render();
-
-        // Update Beat Echo debug overlay
-        updateBeatEchoDebug(currentScene, audioData, motionData);
     }
 
     requestAnimationFrame(render);
-}
-
-// Beat Echo debug state
-let beatEchoDebugState = {
-    beatCount: 0,
-    lastBeatTime: null,
-    log: [],
-    startTime: null,
-    lastLogTime: 0
-};
-
-// Initialize debug copy button
-function initBeatEchoDebug() {
-    const copyBtn = document.getElementById('debug-copy-log');
-    if (copyBtn) {
-        copyBtn.addEventListener('click', () => {
-            const logText = formatBeatEchoLog();
-            navigator.clipboard.writeText(logText).then(() => {
-                const statusEl = document.getElementById('debug-copy-status');
-                statusEl.textContent = '✓ Copied to clipboard!';
-                statusEl.style.display = 'block';
-                setTimeout(() => { statusEl.style.display = 'none'; }, 2000);
-            }).catch(err => {
-                console.error('Copy failed:', err);
-                // Fallback: show in console
-                console.log('=== BEAT ECHO LOG ===\n' + logText);
-            });
-        });
-    }
-}
-
-// Format log for copying
-function formatBeatEchoLog() {
-    const header = `Beat Echo Debug Log
-Generated: ${new Date().toISOString()}
-Duration: ${beatEchoDebugState.startTime ? ((Date.now() - beatEchoDebugState.startTime) / 1000).toFixed(1) : 0}s
-Total beats: ${beatEchoDebugState.beatCount}
-Log entries: ${beatEchoDebugState.log.length}
-
---- LOG ---
-`;
-    const entries = beatEchoDebugState.log.map(e =>
-        `[${e.time.toFixed(2)}s] ${e.type}: ${JSON.stringify(e.data)}`
-    ).join('\n');
-
-    return header + entries;
-}
-
-// Update Beat Echo debug overlay
-function updateBeatEchoDebug(currentScene, audioData, motionData) {
-    const debugEl = document.getElementById('beat-echo-debug');
-    if (!debugEl) return;
-
-    if (currentScene === 'Beat Echo') {
-        debugEl.style.display = 'block';
-
-        // Initialize start time
-        if (!beatEchoDebugState.startTime) {
-            beatEchoDebugState.startTime = Date.now();
-            beatEchoDebugState.log = [];
-            // Log initial state
-            logBeatEchoState('START', audioData, motionData);
-        }
-
-        const elapsed = (Date.now() - beatEchoDebugState.startTime) / 1000;
-
-        // Collect current state
-        const hasWebcamHD = visualizer.webcamHDData && visualizer.webcamHDData.some(v => v > 0);
-        const hasPrevBeat = visualizer.prevBeatData && visualizer.prevBeatData.some(v => v > 0);
-        const webcamMode = webcamAnalyzer ? webcamAnalyzer.getMode() : -1;
-        const webcamModeName = webcamAnalyzer ? webcamAnalyzer.getModeName() : 'N/A';
-
-        // Log on beat
-        if (audioData.beat) {
-            beatEchoDebugState.beatCount++;
-            beatEchoDebugState.lastBeatTime = Date.now();
-            logBeatEchoState('BEAT', audioData, motionData, {
-                hasWebcamHD,
-                hasPrevBeat,
-                webcamMode,
-                beatNum: beatEchoDebugState.beatCount
-            });
-        }
-
-        // Log state every 2 seconds
-        if (elapsed - beatEchoDebugState.lastLogTime > 2) {
-            beatEchoDebugState.lastLogTime = elapsed;
-            logBeatEchoState('STATUS', audioData, motionData, {
-                hasWebcamHD,
-                hasPrevBeat,
-                webcamMode
-            });
-        }
-
-        // Update display
-        document.getElementById('debug-beat-count').textContent = beatEchoDebugState.beatCount;
-
-        const timeSinceBeat = beatEchoDebugState.lastBeatTime
-            ? ((Date.now() - beatEchoDebugState.lastBeatTime) / 1000).toFixed(1) + 's ago'
-            : 'never';
-        document.getElementById('debug-last-beat').textContent = timeSinceBeat;
-
-        document.getElementById('debug-webcam-hd').textContent = hasWebcamHD ? 'YES ✓' : 'NO ✗';
-        document.getElementById('debug-webcam-hd').style.color = hasWebcamHD ? '#0f0' : '#f00';
-
-        document.getElementById('debug-prevbeat').textContent = hasPrevBeat ? 'YES ✓' : 'NO ✗';
-        document.getElementById('debug-prevbeat').style.color = hasPrevBeat ? '#0f0' : '#f00';
-
-        const hasComposite = visualizer.beatEchoTargets !== null;
-        document.getElementById('debug-composite').textContent = hasComposite
-            ? `idx ${visualizer.beatEchoTargets.compositeIndex}`
-            : 'NO';
-
-        document.getElementById('debug-threshold').textContent = visualizer.uniforms.uBeatEchoThreshold.value.toFixed(3);
-        document.getElementById('debug-colormode').textContent = visualizer.getBeatEchoColorModeName();
-        document.getElementById('debug-webcam-mode').textContent = `${webcamMode} (${webcamModeName})`;
-        document.getElementById('debug-webcam-mode').style.color = webcamMode > 0 ? '#0f0' : '#f00';
-
-        document.getElementById('debug-log-count').textContent = beatEchoDebugState.log.length;
-    } else {
-        debugEl.style.display = 'none';
-        // Reset when leaving Beat Echo
-        if (beatEchoDebugState.startTime) {
-            beatEchoDebugState.beatCount = 0;
-            beatEchoDebugState.lastBeatTime = null;
-            beatEchoDebugState.startTime = null;
-            beatEchoDebugState.log = [];
-            beatEchoDebugState.lastLogTime = 0;
-        }
-    }
-}
-
-// Log a state entry
-function logBeatEchoState(type, audioData, motionData, extra = {}) {
-    const elapsed = beatEchoDebugState.startTime
-        ? (Date.now() - beatEchoDebugState.startTime) / 1000
-        : 0;
-
-    beatEchoDebugState.log.push({
-        time: elapsed,
-        type: type,
-        data: {
-            ...extra,
-            bass: audioData.bass?.toFixed(2),
-            mid: audioData.mid?.toFixed(2),
-            treble: audioData.treble?.toFixed(2),
-            energy: audioData.energy?.toFixed(2),
-            motionIntensity: motionData?.intensity?.toFixed(2) || 'N/A'
-        }
-    });
-
-    // Keep log size reasonable
-    if (beatEchoDebugState.log.length > 200) {
-        beatEchoDebugState.log.shift();
-    }
 }
 
 // Keyboard controls
@@ -791,24 +633,6 @@ function handleKeyPress(event) {
             }
             break;
 
-        case 'r':
-        case 'R':
-            // Reset Beat Echo composite (only in Beat Echo mode)
-            if (visualizer && visualizer.getCurrentSceneName() === 'Beat Echo') {
-                visualizer.clearBeatEchoComposite();
-                showStatus('Beat Echo cleared');
-            }
-            break;
-
-        case 'b':
-        case 'B':
-            // Cycle Beat Echo color mode (only in Beat Echo mode)
-            if (visualizer && visualizer.getCurrentSceneName() === 'Beat Echo') {
-                const colorMode = visualizer.cycleBeatEchoColorMode();
-                showStatus(`Beat Echo: ${colorMode}`);
-            }
-            break;
-
         default:
             // Number keys 1-9 for direct scene selection
             const num = parseInt(event.key);
@@ -841,7 +665,6 @@ async function init() {
     initPaintControls();
     initIPhoneControls();
     initFullscreenButton();
-    initBeatEchoDebug();
     hideError();
 
     if (audioInitialized) {

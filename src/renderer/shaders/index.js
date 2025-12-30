@@ -896,102 +896,6 @@ void main() {
 }
 `;
 
-// Beat Echo shader - layers full camera frames on each beat where motion occurred
-// Creates a stroboscopic multi-exposure effect synced to the music
-const beatEchoShader = `
-precision highp float;
-
-uniform float uTime;
-uniform vec2 uResolution;
-uniform sampler2D uWebcamTextureHD;
-uniform sampler2D uPrevBeatTexture;    // Previous beat's webcam (DataTexture, same format)
-uniform vec2 uWebcamHDResolution;
-uniform sampler2D uBeatEchoComposite;  // Accumulated layers
-uniform float uBeatColorMode;          // 0=natural, 1=tint, 2=audio
-uniform float uBeatHue;                // Current hue for tint mode
-uniform float uBass;
-uniform float uMid;
-uniform float uTreble;
-uniform float uBeatEchoThreshold;      // Motion sensitivity (default 0.01)
-uniform float uOnBeat;                 // 1.0 on beat frame, 0.0 otherwise
-
-vec3 hsv2rgb(vec3 c) {
-    vec4 K = vec4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
-    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-}
-
-void main() {
-    vec2 uv = gl_FragCoord.xy / uResolution;
-
-    // Aspect ratio correction for webcam
-    float screenAspect = uResolution.x / uResolution.y;
-    float webcamAspect = uWebcamHDResolution.x / uWebcamHDResolution.y;
-    vec2 webcamUV = uv;
-    if (screenAspect > webcamAspect) {
-        float scale = screenAspect / webcamAspect;
-        webcamUV.y = (uv.y - 0.5) / scale + 0.5;
-    } else {
-        float scale = webcamAspect / screenAspect;
-        webcamUV.x = (uv.x - 0.5) / scale + 0.5;
-    }
-    webcamUV.y = 1.0 - webcamUV.y;  // Flip Y
-
-    // Get existing composite
-    vec3 composite = texture2D(uBeatEchoComposite, uv).rgb;
-
-    // On beat: layer the FULL current frame where motion is detected
-    if (uOnBeat > 0.5) {
-        // Sample current webcam frame
-        vec3 current = texture2D(uWebcamTextureHD, webcamUV).rgb;
-        vec3 prevBeat = texture2D(uPrevBeatTexture, webcamUV).rgb;
-
-        // Detect motion - where pixels changed since last beat
-        vec3 diff = abs(current - prevBeat);
-        float motion = max(diff.r, max(diff.g, diff.b));
-
-        // Where there's motion, decide what to show based on "interestingness"
-        // People tend to be more extreme (far from mid-gray) than plain backgrounds
-        if (motion > uBeatEchoThreshold) {
-            vec3 color;
-            if (uBeatColorMode < 0.5) {
-                // Natural - show actual camera colors
-                color = current;
-            } else if (uBeatColorMode < 1.5) {
-                // Beat tint - tint the camera image with cycling hue
-                vec3 tint = hsv2rgb(vec3(uBeatHue, 0.8, 1.0));
-                color = current * tint * 1.5;
-            } else {
-                // Audio-reactive - tint based on frequency bands
-                vec3 tint = vec3(0.5 + uBass, 0.5 + uMid, 0.5 + uTreble);
-                color = current * tint;
-            }
-
-            // Calculate "interestingness" based on luminance
-            float lumColor = dot(color, vec3(0.299, 0.587, 0.114));
-            float lumComposite = dot(composite, vec3(0.299, 0.587, 0.114));
-
-            // If composite is essentially black (uninitialized), always use current
-            if (lumComposite < 0.02) {
-                composite = color;
-            } else {
-                // Compare extremity - how far from mid-gray
-                float interestColor = abs(lumColor - 0.5);
-                float interestComposite = abs(lumComposite - 0.5);
-
-                // Always show some of the new content (40% minimum)
-                // Where new is more interesting: 100% new
-                // Where old is more interesting: 40% new, 60% old
-                float blend = 0.4 + 0.6 * step(interestComposite, interestColor);
-                composite = mix(composite, color, blend);
-            }
-        }
-    }
-
-    gl_FragColor = vec4(composite, 1.0);
-}
-`;
-
 // iPhone Camera shader - supports motion effects when CORS is available
 // When CORS is blocked, displays black and an img overlay shows the feed
 // When CORS works, this shader renders the feed with motion effects
@@ -1133,11 +1037,6 @@ export default {
             name: "iPhone Camera",
             vertexShader: commonVertexShader,
             fragmentShader: iphoneCameraShader
-        },
-        {
-            name: "Beat Echo",
-            vertexShader: commonVertexShader,
-            fragmentShader: beatEchoShader
         },
         {
             name: "Bubble Rain",
