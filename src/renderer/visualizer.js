@@ -157,8 +157,8 @@ export default class Visualizer {
     // Add spark particles mesh to scene (rendered on top of visualization)
     this.scene.add(this.sparkSystem.getMesh());
 
-    // Create bubble particle system for Bubble Rain mode
-    this.bubbleSystem = new BubbleParticleSystem(1500);
+    // Create bubble particle system for Bubble Rain mode (8000 particles for dense rain)
+    this.bubbleSystem = new BubbleParticleSystem(8000);
 
     // Add bubble particles mesh to scene (rendered on top of visualization)
     this.scene.add(this.bubbleSystem.getMesh());

@@ -978,8 +978,8 @@ void main() {
     }
     webcamUV.y = 1.0 - webcamUV.y;  // Flip Y
 
-    // Dimmed webcam background (40% brightness)
-    vec3 bg = texture2D(uWebcamTextureHD, webcamUV).rgb * 0.4;
+    // Webcam background at full brightness
+    vec3 bg = texture2D(uWebcamTextureHD, webcamUV).rgb;
 
     gl_FragColor = vec4(bg, 1.0);
 }
