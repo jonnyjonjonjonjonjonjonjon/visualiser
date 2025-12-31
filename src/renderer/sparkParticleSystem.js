@@ -357,7 +357,7 @@ export default class SparkParticleSystem {
    * @param {number} value - Density value (will be clamped to 0.25-5.0)
    */
   setDensity(value) {
-    this.density = Math.max(0.25, Math.min(5.0, value));
+    this.density = Math.max(0.25, Math.min(10.0, value));
   }
 
   /**
