@@ -360,6 +360,29 @@ function updateIPhoneFeedVisibility() {
     }
 }
 
+// Wake lock to prevent screen sleep in fullscreen
+let wakeLock = null;
+
+async function requestWakeLock() {
+    if ('wakeLock' in navigator) {
+        try {
+            wakeLock = await navigator.wakeLock.request('screen');
+            wakeLock.addEventListener('release', () => {
+                wakeLock = null;
+            });
+        } catch (err) {
+            console.log('Wake lock request failed:', err.message);
+        }
+    }
+}
+
+async function releaseWakeLock() {
+    if (wakeLock) {
+        await wakeLock.release();
+        wakeLock = null;
+    }
+}
+
 // Initialize fullscreen button
 function initFullscreenButton() {
     fullscreenBtn.addEventListener('click', () => {
@@ -377,6 +400,20 @@ function initFullscreenButton() {
         fullscreenBtn.classList.toggle('is-fullscreen', !!document.fullscreenElement);
         // Trigger resize after fullscreen transition
         setTimeout(resizeCanvas, 100);
+
+        // Manage wake lock for fullscreen
+        if (document.fullscreenElement) {
+            requestWakeLock();
+        } else {
+            releaseWakeLock();
+        }
+    });
+
+    // Re-acquire wake lock when page becomes visible again (if in fullscreen)
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && document.fullscreenElement && !wakeLock) {
+            requestWakeLock();
+        }
     });
 }
 

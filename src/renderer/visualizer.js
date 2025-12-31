@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import shaders from './shaders/index.js';
 import SparkParticleSystem from './sparkParticleSystem.js';
 import BubbleParticleSystem from './bubbleParticleSystem.js';
+import ConfettiParticleSystem from './confettiParticleSystem.js';
 
 /**
  * Visualizer - Main Three.js visualization engine for music visualizer
@@ -162,6 +163,12 @@ export default class Visualizer {
 
     // Add bubble particles mesh to scene (rendered on top of visualization)
     this.scene.add(this.bubbleSystem.getMesh());
+
+    // Create confetti particle system for Confetti mode (8000 particles)
+    this.confettiSystem = new ConfettiParticleSystem(8000);
+
+    // Add confetti particles mesh to scene (rendered on top of visualization)
+    this.scene.add(this.confettiSystem.getMesh());
 
     // Current mesh (fullscreen quad)
     this.mesh = null;
@@ -401,6 +408,20 @@ export default class Visualizer {
       } else {
         this.bubbleSystem.getMesh().visible = false;
       }
+
+      // Confetti mode - update confetti particle system
+      if (this.getCurrentSceneName() === 'Confetti') {
+        const dt = 0.016;  // ~60fps
+        this.confettiSystem.update(
+          dt,
+          motionData.buffer,
+          motionData.width,
+          motionData.height
+        );
+        this.confettiSystem.getMesh().visible = true;
+      } else {
+        this.confettiSystem.getMesh().visible = false;
+      }
     } else {
       // Motion off - decay values smoothly
       this.uniforms.uMotionIntensity.value *= 0.9;
@@ -419,6 +440,14 @@ export default class Visualizer {
         this.bubbleSystem.getMesh().visible = true;
       } else {
         this.bubbleSystem.getMesh().visible = false;
+      }
+
+      // Update confetti even without motion (they still flutter down)
+      if (this.getCurrentSceneName() === 'Confetti') {
+        this.confettiSystem.update(0.016, null, 0, 0);
+        this.confettiSystem.getMesh().visible = true;
+      } else {
+        this.confettiSystem.getMesh().visible = false;
       }
     }
   }
@@ -778,6 +807,11 @@ export default class Visualizer {
     // Dispose bubble system
     if (this.bubbleSystem) {
       this.bubbleSystem.dispose();
+    }
+
+    // Dispose confetti system
+    if (this.confettiSystem) {
+      this.confettiSystem.dispose();
     }
 
     // Dispose ping-pong targets

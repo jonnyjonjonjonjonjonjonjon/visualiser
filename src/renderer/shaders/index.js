@@ -874,6 +874,11 @@ export default {
             name: "Bubble Rain",
             vertexShader: commonVertexShader,
             fragmentShader: bubbleRainShader
+        },
+        {
+            name: "Confetti",
+            vertexShader: commonVertexShader,
+            fragmentShader: bubbleRainShader
         }
     ]
 };
