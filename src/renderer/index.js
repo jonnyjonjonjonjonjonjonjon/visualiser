@@ -211,10 +211,10 @@ function updatePaintControlsUI() {
     paintColorSpeedSlider.value = Math.round(colorSpeed * 100);
     paintColorSpeedValueEl.textContent = Math.round(colorSpeed * 100).toString();
 
-    // Fade delay: slider value 2-30, uniform value 2.0-30.0
+    // Fade delay: slider value 0.1-30, uniform value 0.1-30.0
     const fadeDelay = visualizer.uniforms.uPaintFadeDelay.value;
-    paintFadeDelaySlider.value = Math.round(fadeDelay);
-    paintFadeDelayValueEl.textContent = `${Math.round(fadeDelay)}s`;
+    paintFadeDelaySlider.value = fadeDelay;
+    paintFadeDelayValueEl.textContent = `${fadeDelay}s`;
 }
 
 // Initialize paint controls event listeners
@@ -238,7 +238,7 @@ function initPaintControls() {
     // Fade delay slider
     paintFadeDelaySlider.addEventListener('input', () => {
         if (!visualizer) return;
-        const fadeDelay = parseInt(paintFadeDelaySlider.value);
+        const fadeDelay = parseFloat(paintFadeDelaySlider.value);
         visualizer.uniforms.uPaintFadeDelay.value = fadeDelay;
         paintFadeDelayValueEl.textContent = `${fadeDelay}s`;
     });
