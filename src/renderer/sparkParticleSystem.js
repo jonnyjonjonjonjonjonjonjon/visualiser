@@ -129,7 +129,7 @@ export default class SparkParticleSystem {
    * @param {number} intensity - Overall motion intensity (0-1)
    * @param {number} dt - Delta time in seconds
    */
-  spawnFromMotion(motionBuffer, width, height, velX, velY, intensity, dt) {
+  spawnFromMotion(motionBuffer, width, height, velX, velY, intensity, dt, centerX = 0.5, centerY = 0.5) {
     if (intensity < 0.03 || !motionBuffer) return;
 
     // Calculate movement direction

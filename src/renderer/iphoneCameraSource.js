@@ -64,12 +64,11 @@ export default class IPhoneCameraSource {
     // Try to use Electron proxy for CORS bypass
     if (window.electronAPI && window.electronAPI.startMjpegProxy) {
       try {
-        console.log('Starting MJPEG proxy for:', url);
+        // Start proxy (URL not logged for privacy)
         const result = await window.electronAPI.startMjpegProxy(url);
 
         if (result.success && result.proxyUrl) {
           this.proxyUrl = result.proxyUrl;
-          console.log('Proxy started at:', this.proxyUrl);
 
           // Connect via proxy with CORS enabled
           const corsImg = new Image();
@@ -108,7 +107,7 @@ export default class IPhoneCameraSource {
             this.imgElement = corsImg;
             this.initMotionDetection();
             this.isConnected = true;
-            console.log('iPhone camera connected via proxy - motion effects available');
+            // Connected via proxy with motion effects
             return;
           } else {
             console.warn('Proxy connection failed, falling back to direct');
@@ -124,7 +123,7 @@ export default class IPhoneCameraSource {
     }
 
     // Fall back to direct connection (display only, no motion effects)
-    console.log('Using direct connection (display only mode)');
+    // Direct connection - display only mode
     this.corsEnabled = false;
     this.imgElement = new Image();
 

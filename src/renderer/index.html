@@ -3,6 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Real-time audio-reactive WebGL visualizer with 11 shader scenes, webcam integration, and particle systems">
+    <meta name="theme-color" content="#000000">
+    <meta property="og:title" content="Music Visualizer">
+    <meta property="og:description" content="Real-time audio-reactive WebGL visualizer with 11 shader scenes, webcam integration, and particle systems">
+    <meta property="og:type" content="website">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>">
     <title>Music Visualizer</title>
     <style>
         * {
@@ -30,7 +36,19 @@
             height: 100% !important;
         }
 
+        html:-webkit-full-screen,
+        body:-webkit-full-screen,
+        :-webkit-full-screen {
+            width: 100% !important;
+            height: 100% !important;
+        }
+
         #visualizer:fullscreen {
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        #visualizer:-webkit-full-screen {
             width: 100% !important;
             height: 100% !important;
         }
@@ -85,6 +103,7 @@
             opacity: 0;
             transition: opacity 0.3s ease, background 0.2s ease;
             z-index: 1001;
+            -webkit-backdrop-filter: blur(10px);
             backdrop-filter: blur(10px);
             pointer-events: none;
         }
@@ -140,7 +159,7 @@
             left: 20px;
             font-size: 14px;
             font-family: monospace;
-            color: #0f0;
+            color: rgba(255, 255, 255, 0.6);
             background: rgba(0, 0, 0, 0.7);
             padding: 5px 10px;
             border-radius: 4px;
@@ -193,7 +212,7 @@
 
         #trails-controls .trails-label {
             width: 60px;
-            font-size: 11px;
+            font-size: 12px;
             color: #999;
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -206,7 +225,7 @@
             padding: 4px 10px;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 11px;
+            font-size: 12px;
             transition: all 0.15s ease;
         }
 
@@ -257,7 +276,7 @@
             width: 45px;
             text-align: right;
             color: #ff9632;
-            font-size: 11px;
+            font-size: 12px;
             font-weight: 500;
         }
 
@@ -342,6 +361,7 @@
             transform: translateY(20px);
             transition: opacity 0.3s ease, transform 0.3s ease;
             z-index: 1000;
+            -webkit-backdrop-filter: blur(10px);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
@@ -363,7 +383,7 @@
             display: block;
             margin-bottom: 6px;
             color: #aaa;
-            font-size: 11px;
+            font-size: 12px;
             text-transform: uppercase;
             letter-spacing: 1px;
         }
@@ -453,7 +473,7 @@
         }
 
         #iphone-modal input[type="text"]::placeholder {
-            color: #666;
+            color: #999;
         }
 
         #iphone-modal .modal-buttons {
@@ -497,7 +517,7 @@
 
         #iphone-modal .hint {
             font-size: 12px;
-            color: #666;
+            color: #999;
             margin-top: 15px;
             margin-bottom: 0;
         }
@@ -545,7 +565,7 @@
             <span class="trails-label">Color</span>
             <button data-color="0" class="active">Fire</button>
             <button data-color="1">Rainbow</button>
-            <button data-color="2">Viz</button>
+            <button data-color="2">Audio</button>
         </div>
         <div class="trails-row">
             <span class="trails-label">Density</span>
@@ -573,7 +593,7 @@
                 <span class="key">←</span><span class="key">→</span> Previous / Next Scene
             </div>
             <div class="key-group">
-                <span class="key">1-9</span> Jump to Scene
+                <span class="key">1-9</span> Jump to Scene &nbsp; <span class="key">0</span> Scene 10 &nbsp; <span class="key">←</span><span class="key">→</span> for 10-11
             </div>
             <div class="key-group">
                 <span class="key">Space</span> Pause / Resume
@@ -585,13 +605,13 @@
                 <span class="key">F</span> or <span class="key">F11</span> Toggle Fullscreen
             </div>
             <div class="key-group">
-                <span class="key">C</span> Webcam Mode (Off / Push / Predator / Trails)
+                <span class="key">C</span> Webcam Mode (Off / Push/Displace / Predator / Trails)
             </div>
             <div class="key-group">
-                <span class="key">V</span> Spark Color (Fire / Rainbow / Viz)
+                <span class="key">V</span> Spark Color — Trails mode only (Fire / Rainbow / Audio)
             </div>
             <div class="key-group">
-                <span class="key">+</span><span class="key">-</span> Spark Density
+                <span class="key">+</span><span class="key">-</span> Spark Density — Trails mode only
             </div>
             <div class="key-group">
                 <span class="key">I</span> Connect iPhone Camera
@@ -609,8 +629,8 @@
     </div>
 
     <div id="error-message">
-        <h2>Microphone Access Required</h2>
-        <p>This visualizer needs access to your microphone to analyze audio. Please grant permission and reload the application.</p>
+        <h2 id="error-heading">Error</h2>
+        <p>Something went wrong. Please reload the page and try again.</p>
     </div>
 
 
@@ -649,7 +669,7 @@
                 <button id="iphone-cancel-btn">Cancel</button>
                 <button id="iphone-connect-btn">Connect</button>
             </div>
-            <p class="hint">Make sure your iPhone and this device are on the same WiFi network.</p>
+            <p class="hint">Make sure your iPhone and this device are on the same Wi-Fi network.</p>
         </div>
     </div>
 

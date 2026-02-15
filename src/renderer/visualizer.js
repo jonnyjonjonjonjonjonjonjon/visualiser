@@ -177,6 +177,7 @@ export default class Visualizer {
     this.pingPongTargets = null;
     this.currentTargetIndex = 0;
     this.lastFrameTime = performance.now();
+    this.lastUpdateTime = performance.now();
 
     // Bind resize handler (called from index.js)
     this.handleResize = this.handleResize.bind(this);
@@ -206,11 +207,15 @@ export default class Visualizer {
       if (this.mesh.material) this.mesh.material.dispose();
     }
 
-    // Clear ping-pong targets when switching to Motion Paint (fresh start)
-    if (shaderDef.name === 'Motion Paint' && this.pingPongTargets) {
-      this.clearPingPongTargets();
+    // Dispose ping-pong targets when leaving Motion Paint (free GPU memory)
+    // Clear them when entering Motion Paint (fresh start)
+    if (shaderDef.name === 'Motion Paint') {
+      if (this.pingPongTargets) {
+        this.clearPingPongTargets();
+      }
+    } else {
+      this.disposePingPongTargets();
     }
-
 
     // Create shader material
     const material = new THREE.ShaderMaterial({
@@ -302,8 +307,13 @@ export default class Visualizer {
    * @param {Object} motionData - Motion analysis data (optional)
    */
   update(audioData, motionData = null) {
-    // Update time uniform (increment each frame)
-    this.uniforms.uTime.value += 0.016; // ~60fps
+    // Compute measured delta time
+    const now = performance.now();
+    const dt = Math.min((now - this.lastUpdateTime) / 1000, 0.1); // Cap at 100ms to prevent spiral
+    this.lastUpdateTime = now;
+
+    // Update time uniform, wrapping at 10000.0 to prevent float precision loss
+    this.uniforms.uTime.value = (this.uniforms.uTime.value + dt) % 10000.0;
 
     // Update audio frequency band uniforms
     this.uniforms.uBass.value = audioData.bass || 0;
@@ -376,7 +386,6 @@ export default class Visualizer {
 
       // Trails mode (mode 3) - update spark particle system
       if (motionData.mode === 3) {
-        const dt = 0.016;  // ~60fps
         this.sparkSystem.spawnFromMotion(
           motionData.buffer,
           motionData.width,
@@ -397,7 +406,6 @@ export default class Visualizer {
 
       // Bubble Rain mode - update bubble particle system
       if (this.getCurrentSceneName() === 'Bubble Rain') {
-        const dt = 0.016;  // ~60fps
         this.bubbleSystem.update(
           dt,
           motionData.buffer,
@@ -411,7 +419,6 @@ export default class Visualizer {
 
       // Confetti mode - update confetti particle system
       if (this.getCurrentSceneName() === 'Confetti') {
-        const dt = 0.016;  // ~60fps
         this.confettiSystem.update(
           dt,
           motionData.buffer,
@@ -429,14 +436,14 @@ export default class Visualizer {
 
       // Hide sparks and let them fade out
       if (this.sparkSystem.getActiveCount() > 0) {
-        this.sparkSystem.update(0.016);
+        this.sparkSystem.update(dt);
       } else {
         this.sparkSystem.getMesh().visible = false;
       }
 
       // Update bubbles even without motion (they still fall with gravity)
       if (this.getCurrentSceneName() === 'Bubble Rain') {
-        this.bubbleSystem.update(0.016, null, 0, 0);
+        this.bubbleSystem.update(dt, null, 0, 0);
         this.bubbleSystem.getMesh().visible = true;
       } else {
         this.bubbleSystem.getMesh().visible = false;
@@ -444,7 +451,7 @@ export default class Visualizer {
 
       // Update confetti even without motion (they still flutter down)
       if (this.getCurrentSceneName() === 'Confetti') {
-        this.confettiSystem.update(0.016, null, 0, 0);
+        this.confettiSystem.update(dt, null, 0, 0);
         this.confettiSystem.getMesh().visible = true;
       } else {
         this.confettiSystem.getMesh().visible = false;

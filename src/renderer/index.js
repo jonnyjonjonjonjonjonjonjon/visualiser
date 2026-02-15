@@ -101,7 +101,8 @@ function showStatus(message, duration = 3000) {
 }
 
 // Show error message
-function showError(message) {
+function showError(heading, message) {
+    errorEl.querySelector('#error-heading').textContent = heading;
     errorEl.querySelector('p').textContent = message;
     errorEl.classList.add('visible');
     document.body.classList.add('show-cursor');
@@ -298,13 +299,13 @@ async function connectIPhone() {
 
         // Show connection status with CORS info
         if (iphoneSource.hasCORS()) {
-            showStatus('iPhone connected (effects available)');
+            showStatus('iPhone connected - motion effects enabled');
             // Set CORS flag in visualizer
             if (visualizer) {
                 visualizer.setIPhoneCORSEnabled(true);
             }
         } else {
-            showStatus('iPhone connected (display only)');
+            showStatus('iPhone connected - video only');
             if (visualizer) {
                 visualizer.setIPhoneCORSEnabled(false);
             }
@@ -449,7 +450,6 @@ function initIPhoneControls() {
 async function initAudio() {
     try {
         statusEl.textContent = 'Requesting microphone access...';
-        console.log('Initializing audio analyzer...');
 
         // Check if mediaDevices API is available (requires secure context)
         if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
@@ -459,15 +459,12 @@ async function initAudio() {
         // Check available devices first
         const devices = await navigator.mediaDevices.enumerateDevices();
         const audioInputs = devices.filter(d => d.kind === 'audioinput');
-        console.log('Available audio inputs:', audioInputs.length, audioInputs);
-
         if (audioInputs.length === 0) {
             throw new Error('No audio input devices found');
         }
 
         audioAnalyzer = new AudioAnalyzer();
         await audioAnalyzer.init();
-        console.log('Audio analyzer initialized successfully');
         statusEl.textContent = 'Audio ready';
         hideError();
         return true;
@@ -482,16 +479,21 @@ async function initAudio() {
 
 // Initialize visualizer
 function initVisualizer() {
-    visualizer = new Visualizer(canvas);
-    visualizer.init();
-    updateSceneName(visualizer.getCurrentSceneName());
+    try {
+        visualizer = new Visualizer(canvas);
+        visualizer.init();
+        updateSceneName(visualizer.getCurrentSceneName());
+    } catch (error) {
+        console.error('WebGL initialization failed:', error);
+        showError('WebGL Not Available', 'This visualizer requires WebGL support. Please use a modern browser with hardware acceleration enabled.');
+        throw error;
+    }
 }
 
 // Render loop
 function render() {
     // Check if canvas needs resizing (handles fullscreen and window changes)
     if (visualizer) {
-        const canvas = document.getElementById('visualizer');
         if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
             visualizer.handleResize();
         }
@@ -579,6 +581,7 @@ function handleKeyPress(event) {
             visualizer.previousScene();
             updateSceneName(visualizer.getCurrentSceneName());
             updatePaintControlsVisibility();
+            updateTrailsControlsVisibility();
             updateIPhoneFeedVisibility();
             break;
 
@@ -586,6 +589,7 @@ function handleKeyPress(event) {
             visualizer.nextScene();
             updateSceneName(visualizer.getCurrentSceneName());
             updatePaintControlsVisibility();
+            updateTrailsControlsVisibility();
             updateIPhoneFeedVisibility();
             break;
 
@@ -712,6 +716,15 @@ function handleKeyPress(event) {
             toggleFpsCounter();
             break;
 
+        case '0':
+            // 0 key jumps to scene 10 (index 9)
+            visualizer.setScene(9);
+            updateSceneName(visualizer.getCurrentSceneName());
+            updatePaintControlsVisibility();
+            updateTrailsControlsVisibility();
+            updateIPhoneFeedVisibility();
+            break;
+
         default:
             // Number keys 1-9 for direct scene selection
             const num = parseInt(event.key);
@@ -719,6 +732,7 @@ function handleKeyPress(event) {
                 visualizer.setScene(num - 1);
                 updateSceneName(visualizer.getCurrentSceneName());
                 updatePaintControlsVisibility();
+                updateTrailsControlsVisibility();
                 updateIPhoneFeedVisibility();
             }
             break;
@@ -754,7 +768,7 @@ async function init() {
             statusEl.textContent = 'Ready - Press H for help, C for webcam';
         } catch (error) {
             console.error('Webcam initialization failed:', error);
-            statusEl.textContent = `Webcam error: ${error.message}`;
+            statusEl.textContent = 'Webcam not available';
             webcamAnalyzer = null;
             // After 3 seconds, change to normal status
             setTimeout(() => {
@@ -768,11 +782,11 @@ async function init() {
     // Start render loop
     render();
 
-    // Show cursor briefly at start
+    // Show cursor and hint at start
     document.body.classList.add('show-cursor');
     setTimeout(() => {
         document.body.classList.remove('show-cursor');
-    }, 3000);
+    }, 5000);
 }
 
 // Start the app

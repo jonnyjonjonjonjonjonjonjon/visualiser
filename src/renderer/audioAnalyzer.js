@@ -470,6 +470,18 @@ export default class AudioAnalyzer {
    * @returns {Object} Object containing bass, mid, treble, energy, beat, spectrum
    */
   getAudioData() {
+    // Return zeroed data when muted
+    if (this.muted) {
+      return {
+        bass: 0,
+        mid: 0,
+        treble: 0,
+        energy: 0,
+        beat: false,
+        spectrum: new Uint8Array(this.bufferLength)
+      };
+    }
+
     // Increment frame counter to enable FFT caching
     // (FFT computed once per getAudioData call, not per individual method)
     this.frameCounter++;

@@ -822,6 +822,10 @@ void main() {
 }
 `;
 
+// Confetti reuses the same webcam background shader as Bubble Rain
+// (both overlay CPU particles on the webcam feed)
+const confettiShader = bubbleRainShader;
+
 // Export all shaders
 export default {
     shaders: [
@@ -878,7 +882,7 @@ export default {
         {
             name: "Confetti",
             vertexShader: commonVertexShader,
-            fragmentShader: bubbleRainShader
+            fragmentShader: confettiShader
         }
     ]
 };

@@ -1,27 +1,36 @@
 # Music Visualizer
 
-A psychedelic music visualization app that creates beautiful, reactive visuals from audio input.
+A real-time audio-reactive WebGL visualizer built with Three.js, featuring 11 shader scenes, webcam integration, iPhone camera support, and particle systems.
 
 ## Features
 
-- **6 Unique Visualization Scenes**:
-  1. **Fractal Tunnel** - Raymarched fractal with audio-reactive zoom
-  2. **Plasma Dream** - Classic plasma effect with layered sine waves
-  3. **Kaleidoscope** - Mirror effect with 6-12 dynamic segments
-  4. **Waveform Terrain** - 3D neon grid terrain driven by audio spectrum
+- **11 Visualization Scenes**:
+  1. **Waveform 2D** - Spectrum bars and mirrored waveform display
+  2. **Fractal Tunnel** - Infinite tunnel with audio-reactive neon grid
+  3. **Plasma Dream** - Classic plasma effect with layered sine waves
+  4. **Kaleidoscope** - Mirror effect with 6-12 dynamic segments
   5. **Nebula Particles** - Noise-based nebula clouds with RGB frequency mapping
-  6. **Geometric Pulse** - Sacred geometry (Flower of Life, Metatron's Cube)
+  6. **Black** - Clean black background for webcam/trails overlay
+  7. **Motion Paint** - Light-painting effect that captures movement as color
+  8. **Webcam** - Direct webcam feed display
+  9. **iPhone Camera** - iPhone MJPEG stream with motion effects
+  10. **Bubble Rain** - Bubble particles falling over webcam background
+  11. **Confetti** - Confetti particles with realistic paper physics
+
+- **Webcam Integration**:
+  - Push/Displace mode - distorts visuals away from motion
+  - Predator mode - rainbow trails overlay on movement
+  - Trails mode - fire/rainbow/audio-reactive spark particles follow motion
+
+- **iPhone Camera Support**:
+  - Connect via MJPEG stream from iPhone camera apps
+  - Full motion effects when CORS proxy is available
+  - Display-only fallback mode
 
 - **Real-time Audio Analysis**:
-  - FFT frequency analysis
-  - Beat detection
-  - Bass/Mid/Treble separation
+  - FFT frequency analysis with bass/mid/treble separation
+  - Beat detection with configurable sensitivity
   - Adaptive gain normalization
-
-- **Controls**:
-  - Switch between scenes with arrow keys or number keys
-  - Fullscreen mode
-  - Always-on-top window option
 
 ## Installation
 
@@ -33,123 +42,57 @@ A psychedelic music visualization app that creates beautiful, reactive visuals f
 ### Setup
 
 ```bash
-# Clone or download this project
 cd visualiser
-
-# Install dependencies
 npm install
 ```
 
-## Running the App
+## Running
 
-### Development Mode
 ```bash
 npm run dev
 ```
-This starts Vite dev server with hot reload and opens Electron.
 
-### Production Mode
-```bash
-# Build the renderer first
-npm run build:renderer
-
-# Run the app
-npm start
-```
-
-## Building for Distribution
-
-### Windows
-```bash
-npm run build:win
-```
-Creates installer and portable executable in `build/` folder.
-
-### macOS
-```bash
-npm run build:mac
-```
-
-### Linux
-```bash
-npm run build:linux
-```
+Opens the visualizer in your default browser via Vite dev server with hot reload.
 
 ## Keyboard Shortcuts
 
 | Key | Action |
 |-----|--------|
 | `←` / `→` | Previous / Next scene |
-| `1` - `6` | Jump to specific scene |
+| `1`-`9` | Jump to scenes 1-9 |
+| `0` | Jump to scene 10 (Bubble Rain) |
+| `←` / `→` | Also reaches scenes 10-11 |
 | `Space` | Pause / Resume |
-| `F` or `F11` | Toggle fullscreen |
-| `T` | Toggle always-on-top |
-| `H` | Show/hide help overlay |
 | `M` | Mute audio monitoring |
-| `Esc` | Exit fullscreen |
+| `F` or `F11` | Toggle fullscreen |
+| `C` | Cycle webcam mode (Off / Push / Predator / Trails) |
+| `V` | Cycle spark color (Trails mode only) |
+| `+` / `-` | Adjust spark density (Trails mode only) |
+| `I` | Connect iPhone camera |
+| `D` | Disconnect iPhone camera |
+| `P` | Toggle FPS counter |
+| `H` | Toggle help overlay |
 
 ## Audio Input
 
-The visualizer uses your **microphone** as the audio input. To visualize system audio (music playing from Spotify, YouTube, etc.), you have two options:
+The visualizer uses your **microphone** as the audio input. To visualize system audio (music playing from Spotify, YouTube, etc.):
 
-### Option 1: Virtual Audio Cable (Recommended for Windows)
+### Virtual Audio Cable (Recommended for Windows)
 1. Install [VB-Cable](https://vb-audio.com/Cable/) (free)
 2. Set VB-Cable as your default playback device
 3. Set VB-Cable as your default recording device
-4. Play music - it routes through the virtual cable to the visualizer
+4. Play music — it routes through the virtual cable to the visualizer
 
-### Option 2: Stereo Mix (if available)
+### Stereo Mix (if available)
 1. Right-click the speaker icon in system tray → Sounds
 2. Recording tab → Enable "Stereo Mix"
 3. Set Stereo Mix as default recording device
 
-### Option 3: Physical Setup
-- Use speakers and place the microphone near them
-- Works but may pick up ambient noise
-
-## Project Structure
-
-```
-visualiser/
-├── src/
-│   ├── main/           # Electron main process
-│   │   ├── main.js     # App entry, window management
-│   │   └── preload.js  # Secure IPC bridge
-│   └── renderer/       # Frontend (runs in browser context)
-│       ├── index.html  # Main HTML
-│       ├── index.js    # App initialization
-│       ├── audioAnalyzer.js  # Web Audio API analysis
-│       ├── visualizer.js     # Three.js rendering engine
-│       └── shaders/
-│           └── index.js      # GLSL fragment shaders
-├── dist/               # Built renderer files
-├── build/              # Packaged app output
-├── vite.config.js      # Vite bundler config
-└── package.json
-```
-
 ## Technical Details
 
-- **Electron** - Desktop app framework
-- **Three.js** - WebGL rendering
-- **Web Audio API** - Real-time audio analysis
-- **GLSL** - GPU shader programs for visuals
-- **Vite** - Fast bundler with hot reload
-
-## Troubleshooting
-
-### "Microphone Access Required" Error
-- Grant microphone permission when prompted
-- Check browser/system privacy settings
-
-### No Visuals / Black Screen
-- Check browser console for errors (F12)
-- Ensure WebGL is enabled in your browser
-
-### Visuals Not Reacting to Audio
-- Verify correct audio input is selected
-- Check that audio is actually playing
-- Try adjusting your microphone volume
+- **Three.js** - WebGL rendering with custom GLSL shaders
+- **Web Audio API** - Real-time FFT analysis and beat detection
+- **Vite** - Dev server and production bundler
 
 ## License
 
